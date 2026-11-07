@@ -1,0 +1,11 @@
+#!name=Surge API Debug
+#!desc=通用 API 调试/故障注入。Module v1.4.2，Script v1.4.2。支持限制生效次数和 Body 字符串格式化。主 Profile 与既有 MITM 无需修改。使用方法参考https://github.com/evenlinyf/surge-api-debug#readme
+#!arguments=url,direction:response,target:body,action:set,path,value,value_type:string,hit_limit:0,delay_ms:0
+#!arguments-desc=url=完整 URL 或简单正则；\ndirection=request/response；\ntarget=body/header/url/status；\naction=set/format/remove/mock/abort，format 仅支持 Body 字符串字段；\npath=Body JSON 路径或 Header 名，$ 表示整个 Body，数组下标用 [n]，可用 [?(@.field == value)] 筛选；\nvalue=新值，@empty 表示空字符串；format 可用 ${old} 引用字段原值，& 可直接输入，也可用百分号转义；\nvalue_type=string/number/boolean/null/json，format 使用 string；\nhit_limit=生效次数，0 或留空每次生效，3 只在前 3 次生效，-3 从第 4 次起每次生效。在「重置次数」信息面板点刷新可清零；\ndelay_ms=额外延迟。
+
+[Script]
+API Debug = type=http-{{{direction}}}, pattern={{{url}}}, script-path=https://raw.githubusercontent.com/evenlinyf/surge-api-debug/v1.4.2/surge_api_debug.js, requires-body=true, max-size=4194304, timeout=30, debug=true, argument="url_pattern={{{url}}}, target={{{target}}}&action={{{action}}}&path={{{path}}}&value={{{value}}}&value_type={{{value_type}}}&hit_limit={{{hit_limit}}}&delay_ms={{{delay_ms}}}&module_version=1.4.2"
+API-Debug-Reset = type=generic, script-path=https://raw.githubusercontent.com/evenlinyf/surge-api-debug/v1.4.2/surge_api_debug.js, argument="url_pattern={{{url}}}, target=reset&direction={{{direction}}}&module_version=1.4.2"
+
+[Panel]
+API-Debug-Reset = title="重置次数", content="点刷新清零 API Debug 的生效次数", style=info, script-name=API-Debug-Reset, update-interval=1
