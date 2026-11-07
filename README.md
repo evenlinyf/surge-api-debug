@@ -20,6 +20,10 @@ https://github.com/evenlinyf/surge-api-debug/releases/download/v1.4.2/surge_api_
 
 如果还不知道接口 URL 或要改的 JSON 字段，先看[用 Surge Mac 给 iPhone 或 Android 抓包](CAPTURE_GUIDE.md)。
 
+安装后，在模块的参数配置中填写接口匹配规则和修改内容。
+
+![Surge API Debug 模块参数配置界面](assets/iShot_2026-11-08_00.55.12.png)
+
 ## 快速示例
 
 让测试接口的第一次符合条件的响应返回 HTTP 500。把示例域名替换成自己的测试接口。
@@ -103,6 +107,8 @@ value_type=json
 URL 命中且操作条件满足时才计数。同一请求修改多个数组元素也只算一次。同一条 URL 正则匹配的不同请求共用限额，请求方向和响应方向各自计数。更换 URL 规则或非零限额后，下一次符合条件的请求从头计数。
 
 要重新使用同一个限额，打开 Surge 的「重置次数」信息面板，点击刷新图标 **⟳**。显示「已清零，下次命中从头计数」后，下一次命中会从第 1 次开始。`hit_limit` 保持原值。Mac 从 Surge 菜单栏的「面板」进入，iOS 在策略选择页查看。[Surge 信息面板文档](https://manual.nssurge.com/tools/panel.html#dynamic-mode)
+
+![Surge Mac 菜单栏中「面板 → 重置次数」的入口](assets/iShot_2026-11-08_00.57.56.png)
 
 如果面板不可用，可将 `hit_limit` 改为 `0`，发一条符合条件的请求，再改回原值。这条用于清零的请求也会执行操作。Surge 的计数读写没有原子操作，同时命中时实际次数可能与限额有出入。[Surge 持久化 API](https://manual.nssurge.com/scripting/api.html#persistentstore)
 
