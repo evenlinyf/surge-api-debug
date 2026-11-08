@@ -2,7 +2,7 @@
  * surge_api_debug.js
  *
  * 通用 Surge API 调试 / 故障注入脚本。
- * Script Version: 1.5.0
+ * Script Version: 1.5.1
  *
  * Module 参数：
  *   url         由 Module 的 pattern 匹配，按完整正则与方向分别计数和重置
@@ -36,7 +36,7 @@
  */
 
 const PREFIX = "[Surge API Debug]";
-const SCRIPT_VERSION = "1.5.0";
+const SCRIPT_VERSION = "1.5.1";
 
 const args = parseArguments(
   typeof $argument === "string" ? $argument : ""

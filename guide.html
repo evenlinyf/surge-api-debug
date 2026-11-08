@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Surge API Debug 使用指南：参数、字段修改、筛选、故障模拟、生效次数和多模块配置。"><title>Surge API Debug 使用指南</title><style>*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:100px}body{margin:0;background:#f5f7fb;color:#172033;font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}a{color:#1558cc;text-underline-offset:3px}a:hover{text-decoration-thickness:2px}a:focus-visible{outline:3px solid #1558cc;outline-offset:4px;border-radius:3px}.skip-link{position:absolute;left:16px;top:-60px;background:white;padding:8px;z-index:10}.skip-link:focus{top:12px}.shell{max-width:1080px;margin:auto;padding:40px 28px 64px}header{margin-bottom:28px}.eyebrow{color:#53657d;font-size:13px;letter-spacing:.06em}h1{font-size:clamp(30px,5vw,44px);line-height:1.2;margin:10px 0 16px}h2{font-size:23px;line-height:1.4;margin:0 0 18px}h3{font-size:17px;line-height:1.5;margin:20px 0 10px}p{margin:10px 0 16px}.intro{max-width:780px;color:#53657d}.top-links{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0}.toc{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:6px;background:#f5f7fbf5;border-bottom:1px solid #dce3ef;padding:12px 0;margin:0 0 22px;backdrop-filter:blur(8px)}.toc a{padding:5px 10px;background:white;border:1px solid #dce3ef;border-radius:7px;font-size:14px;text-decoration:none}.section{margin:22px 0;scroll-margin-top:110px}.card{padding:28px;background:white;border:1px solid #dce3ef;border-radius:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 24px}.grid>div{min-width:0}.mini-card{padding:12px 16px;background:#f5f7fb;border-radius:8px}.mini-card h3{margin-top:0}.mini-card p{margin-bottom:0}code,pre{font:14px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace}code{background:#edf2fa;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{margin:12px 0 20px;padding:18px;border:1px solid #dce3ef;border-radius:8px;background:#f5f7fb;overflow:auto;tab-size:2}pre code{padding:0;background:none}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid #e3e8f0}th{background:#f5f7fb;font-weight:600}td:first-child{white-space:nowrap}.note{padding:14px 18px;background:#edf4ff;border-left:3px solid #2764d2;border-radius:0 6px 6px 0;margin:18px 0;font-size:14px}footer{margin-top:28px;color:#617089;font-size:14px}.badge{display:inline-block;background:#e7efff;color:#174c9e;border-radius:20px;padding:3px 10px;font-size:13px}@media(max-width:700px){.shell{padding:24px 14px 40px}.card{padding:20px 16px}.grid{grid-template-columns:1fr}.toc{position:static}html{scroll-padding-top:20px}h2{font-size:21px}th,td{padding:10px}pre{padding:14px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}@media print{body{background:white}.shell{max-width:none;padding:0}.toc,.skip-link{display:none}.card{border:0;padding:0}.section{break-inside:avoid}pre{white-space:pre-wrap;overflow-wrap:anywhere}}</style></head><body>
 <a class="skip-link" href="#main-content">跳到主要内容</a><div class="shell">
-<header><p class="eyebrow">SURGE API DEBUG · 使用指南</p><h1>接口调试，从一条规则开始。</h1><p class="intro">修改请求与响应，模拟异常，并控制故障生效次数。此指南是独立 HTML 文件，下载或 clone 后直接用浏览器打开即可阅读。</p><span class="badge">适用源码版本 1.5.0</span><p class="intro">安装以所选 Release 的版本为准；多模块计数隔离需要 1.5.0 或更新版本。</p><div class="top-links"><a href="https://github.com/evenlinyf/surge-api-debug">GitHub 仓库</a><a href="https://github.com/evenlinyf/surge-api-debug/releases">版本发布</a></div></header>
+<header><p class="eyebrow">SURGE API DEBUG · 使用指南</p><h1>接口调试，从一条规则开始。</h1><p class="intro">修改请求与响应，模拟异常，并控制故障生效次数。此指南是独立 HTML 文件，下载或 clone 后直接用浏览器打开即可阅读。</p><span class="badge">适用源码版本 1.5.1</span><p class="intro">安装以所选 Release 的版本为准；多模块计数隔离需要 1.5.0 或更新版本。</p><div class="top-links"><a href="https://github.com/evenlinyf/surge-api-debug">GitHub 仓库</a><a href="https://github.com/evenlinyf/surge-api-debug/releases">版本发布</a></div></header>
 <nav class="toc" aria-label="指南目录"><a href="#start">开始使用</a><a href="#params">参数</a><a href="#matrix">合法组合</a><a href="#body">Body</a><a href="#http">Header / URL / Status</a><a href="#special">故障模拟</a><a href="#hit-limit">生效次数</a><a href="#multiple">多个模块</a><a href="#version">版本</a><a href="#troubleshooting">排查</a></nav>
 <main id="main-content" tabindex="-1">
 <section class="section doc" id="start"><div class="card">
@@ -235,6 +235,7 @@ hit_limit=3</pre>
 </section>
 <section class="section doc" id="multiple"><div class="card">
 <h2>6. 多个模块修改不同接口</h2>
+<p>从 1.5.1 起，模块在 Surge 中归入 <code>Dev</code> 分类。</p>
 <p>给安装链接添加不同的查询参数，可以安装多个独立实例。它们共用一份 JS，在 Surge 中分别填写各自的接口 URL 和修改内容：</p>
 <pre>https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule?name=login
 https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule?name=messages</pre>
@@ -258,12 +259,12 @@ https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_
 <h3>最新正式版</h3>
 <pre>https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule</pre>
 <h3>固定版本</h3>
-<pre>https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.0/surge_api_debug.sgmodule</pre>
+<pre>https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.1/surge_api_debug.sgmodule</pre>
 <p>固定版本需在对应 Release 发布后使用。旧版 <a href="https://github.com/evenlinyf/surge-api-debug/releases/download/v1.4.2/surge_api_debug.sgmodule">1.4.2</a> 可继续安装，但不具备 1.5.0 的多模块计数隔离。所有已发布版本见 <a href="https://github.com/evenlinyf/surge-api-debug/releases">Releases</a>。</p>
 <p>Module 和 JS 的版本需要一致。安装 Module 后，Surge 会自动下载它指定的 JS：</p>
-<pre>script-path=https://raw.githubusercontent.com/evenlinyf/surge-api-debug/v1.5.0/surge_api_debug.js
-module_version=1.5.0</pre>
-<p>版本一致时日志包含 <code>script_version=1.5.0, module_version=1.5.0</code>。版本缺失或不一致时保持请求或响应不变，日志会提示 <code>version mismatch</code>；重新安装配套版本即可。</p>
+<pre>script-path=https://raw.githubusercontent.com/evenlinyf/surge-api-debug/v1.5.1/surge_api_debug.js
+module_version=1.5.1</pre>
+<p>版本一致时日志包含 <code>script_version=1.5.1, module_version=1.5.1</code>。版本缺失或不一致时保持请求或响应不变，日志会提示 <code>version mismatch</code>；重新安装配套版本即可。</p>
 </div></section>
 
 <section class="section doc" id="troubleshooting">

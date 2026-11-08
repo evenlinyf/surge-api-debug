@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const CURRENT_VERSION = "1.5.0";
+const CURRENT_VERSION = "1.5.1";
 
 const scriptSource = fs.readFileSync(
   path.join(__dirname, "../surge_api_debug.js"),
@@ -573,7 +573,7 @@ test("the HTTP and panel scripts both use the matching GitHub release tag", () =
     assert.equal(line.match(/script-path=([^,\s]+)/)?.[1], expectedPath);
     assert.ok(line.endsWith(`&module_version=${CURRENT_VERSION}"`));
   }
-  assert.ok(moduleSource.split("\n")[1].includes(
+  assert.ok(moduleSource.split("\n").find(line => line.startsWith("#!desc=")).includes(
     `Module v${CURRENT_VERSION}，Script v${CURRENT_VERSION}`
   ));
   assert.ok(scriptSource.includes(`const SCRIPT_VERSION = "${CURRENT_VERSION}";`));
@@ -584,7 +584,7 @@ test("module argument metadata remains in one contiguous header block", () => {
     path.join(__dirname, "../surge_api_debug.sgmodule"),
     "utf8"
   );
-  const headerLines = moduleSource.split("\n").slice(0, 4);
+  const headerLines = moduleSource.split("\n\n", 1)[0].split("\n");
 
   assert.ok(headerLines.every(line => line.startsWith("#!")));
   assert.ok(headerLines.some(line => line.startsWith("#!arguments=")));

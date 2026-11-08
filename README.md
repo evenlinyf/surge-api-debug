@@ -12,10 +12,10 @@
 https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule
 ```
 
-要锁定在 1.5.0，复制下面的固定版地址安装。
+要锁定在 1.5.1，复制下面的固定版地址安装。
 
 ```text
-https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.0/surge_api_debug.sgmodule
+https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.1/surge_api_debug.sgmodule
 ```
 
 旧版 [1.4.2 固定安装地址](https://github.com/evenlinyf/surge-api-debug/releases/download/v1.4.2/surge_api_debug.sgmodule) 仍可使用，但不支持多个模块的计数隔离。
@@ -122,6 +122,8 @@ URL 命中且操作条件满足时才计数。同一请求修改多个数组元�
 
 ## 多个模块修改不同接口
 
+从 1.5.1 起，模块在 Surge 中归入 `Dev` 分类。
+
 从 1.5.0 起，可以多次安装同一份 Module，分别修改不同接口，共用一份 JS。给安装链接添加不同的查询参数即可创建独立实例，例如：
 
 ```text
@@ -194,7 +196,7 @@ node --test scripts/coverage-api-debug.js
 ```sh
 node scripts/check-release.js
 # 手动打 tag 时，还可验证指定 tag 与源码一致：
-node scripts/check-release.js v1.5.0
+node scripts/check-release.js v1.5.1
 ```
 
 最新版安装地址保持不变。[GitHub Release 链接说明](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)
