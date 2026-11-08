@@ -2,7 +2,7 @@
  * surge_api_debug.js
  *
  * 通用 Surge API 调试 / 故障注入脚本。
- * Script Version: 1.5.1
+ * Script Version: 1.5.2
  *
  * Module 参数：
  *   url         由 Module 的 pattern 匹配，按完整正则与方向分别计数和重置
@@ -36,7 +36,7 @@
  */
 
 const PREFIX = "[Surge API Debug]";
-const SCRIPT_VERSION = "1.5.1";
+const SCRIPT_VERSION = "1.5.2";
 
 const args = parseArguments(
   typeof $argument === "string" ? $argument : ""
@@ -53,9 +53,10 @@ const target = args.target || "body";
 const action = args.action || "set";
 const path = args.path || "";
 const moduleVersion = args.module_version || "";
-const urlPattern = args.url_pattern || "";
+const panelScope = target === "reset" ? readPanelScope() : null;
+const urlPattern = panelScope ? panelScope.urlPattern : (args.url_pattern || "");
 const hitStore = typeof $persistentStore === "undefined" ? null : $persistentStore;
-const hitLimitText = args.hit_limit?.trim() || "";
+const hitLimitText = (panelScope ? panelScope.hitLimitText : args.hit_limit)?.trim() || "";
 const hitLimit = !hitLimitText || /^[+-]?\d+$/.test(hitLimitText)
   ? Number(hitLimitText)
   : NaN;
@@ -1009,7 +1010,9 @@ function invalid(message) {
 }
 
 function log(message) {
-  const ruleDirection = target === "reset" ? (args.direction || "unknown") : direction;
+  const ruleDirection = target === "reset"
+    ? (panelScope ? panelScope.direction : (args.direction || "unknown"))
+    : direction;
   console.log(
     `${PREFIX}[${ruleDirection}][${urlPattern || "unconfigured"}] ${message}`
   );
@@ -1021,19 +1024,29 @@ function applyHit(result, message) {
   return finish(result, true);
 }
 
+function readPanelScope() {
+  const name = typeof $input === "undefined" ? "" : $input?.panelName;
+  if (typeof name !== "string" || !name.startsWith("API-Debug-Reset|")) return null;
+  const [, ruleDirection = "", limit = "", ...pattern] = name.split("|");
+  return { direction: ruleDirection, hitLimitText: limit, urlPattern: pattern.join("|") };
+}
+
 function handleResetPanel() {
   if (typeof $input === "undefined" || $input?.purpose !== "panel") {
     return $done({});
   }
 
-  const title = "重置次数";
-  const ruleDirection = args.direction;
-  const scope = `${ruleDirection} · ${urlPattern}\n`;
+  const title = `重置次数 · hit_limit=${hitLimitText || "0"}`;
+  const ruleDirection = panelScope ? panelScope.direction : args.direction;
+  const limitInfo = hitLimit > 0 ? `前 ${hitLimit} 次生效`
+    : hitLimit < 0 ? `跳过前 ${-hitLimit} 次，之后持续生效` : "不限次数";
+  const scope = `${ruleDirection} · ${urlPattern}\n${limitInfo}\n`;
   if (typeof $trigger === "undefined" || $trigger !== "button") {
     return $done({ title, content: `${scope}点刷新清零此接口的生效次数`, style: "info" });
   }
 
-  const validRule = urlPattern && (ruleDirection === "request" || ruleDirection === "response");
+  const validRule = urlPattern && Number.isSafeInteger(hitLimit)
+    && (ruleDirection === "request" || ruleDirection === "response");
   const cleared = validRule && resetHitCounter(hitCounterKey(ruleDirection));
   return $done(cleared
     ? { title, content: `${scope}已清零，下次命中从头计数`, style: "good" }

@@ -12,10 +12,10 @@
 https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule
 ```
 
-要锁定在 1.5.1，复制下面的固定版地址安装。
+要锁定在 1.5.2，复制下面的固定版地址安装。
 
 ```text
-https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.1/surge_api_debug.sgmodule
+https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.2/surge_api_debug.sgmodule
 ```
 
 旧版 [1.4.2 固定安装地址](https://github.com/evenlinyf/surge-api-debug/releases/download/v1.4.2/surge_api_debug.sgmodule) 仍可使用，但不支持多个模块的计数隔离。
@@ -114,7 +114,7 @@ URL 命中且操作条件满足时才计数。同一请求修改多个数组元�
 
 要重新使用同一个限额，打开 Surge 的「重置次数」信息面板，点击刷新图标 **⟳**。显示「已清零，下次命中从头计数」后，下一次命中会从第 1 次开始。`hit_limit` 保持原值。Mac 从 Surge 菜单栏的「面板」进入，iOS 在策略选择页查看。[Surge 信息面板文档](https://manual.nssurge.com/tools/panel.html#dynamic-mode)
 
-面板内容会注明 URL 正则和 `request` / `response` 方向。点击刷新只清零该组合的计数，不影响其他接口或另一个方向。自动刷新面板只更新提示，不会清零。
+面板标题会显示配置的 `hit_limit`（例如 `重置次数 · hit_limit=3`），正文注明 URL 正则、`request` / `response` 方向及次数含义：正数为前 N 次生效，负数为跳过前 N 次，`0` 或留空为不限次数。点击刷新只清零该组合的计数，不影响其他接口或另一个方向。自动刷新面板只更新提示，不会清零。
 
 ![Surge Mac 菜单栏中「面板 → 重置次数」的入口](assets/iShot_2026-11-08_00.57.56.png)
 
@@ -144,6 +144,8 @@ https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_
 | `value_type` | `string` | `string` |
 | `hit_limit` | `1` | `3` |
 | `delay_ms` | `0` | `0` |
+
+从 1.5.2 起，面板标识根据 URL 正则、方向和 `hit_limit` 自动生成；固定名称的 reset 脚本通过当前面板标识读取重置属性，不再依赖同名脚本实例传入的另一份配置，无需手填模块名称。修改配置后会生成相应的新面板标识，点击前请核对显示的接口和次数。升级时请将各实例的 Module 和 JS 一起更新。
 
 两个模块可以同时启用，各自计数，各自重置。判断计数是否共用的依据是配置中的完整 `url` 正则和方向，与安装链接的 `name` 无关。若两份配置的 URL 正则和方向相同，则共用计数和重置范围。
 
@@ -196,7 +198,7 @@ node --test scripts/coverage-api-debug.js
 ```sh
 node scripts/check-release.js
 # 手动打 tag 时，还可验证指定 tag 与源码一致：
-node scripts/check-release.js v1.5.1
+node scripts/check-release.js v1.5.2
 ```
 
 最新版安装地址保持不变。[GitHub Release 链接说明](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)

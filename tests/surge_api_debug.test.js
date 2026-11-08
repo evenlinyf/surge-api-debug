@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const CURRENT_VERSION = "1.5.1";
+const CURRENT_VERSION = "1.5.2";
 
 const scriptSource = fs.readFileSync(
   path.join(__dirname, "../surge_api_debug.js"),
@@ -80,23 +80,90 @@ function createModuleInstance(persistentStore, options = {}) {
     action: "set", path: "$", value: "login", value_type: "string",
     hit_limit: "1", delay_ms: "0", ...options
   };
-  const render = line => line.match(/\bargument="([^"]+)"/)[1]
-    .replace(/\{\{\{(\w+)\}\}\}/g, (_, name) => values[name]);
+  const substitute = text => text.replace(/\{\{\{(\w+)\}\}\}/g, (_, name) => values[name]);
+  const render = line => substitute(line.match(/\bargument="([^"]+)"/)[1]);
   const httpLine = source.split("\n").find(line => line.includes("type=http-"));
   const resetLine = source.split("\n").find(line => line.includes("type=generic"));
+  const panelLine = source.split("\n").find(line => line.includes("script-name="));
+  const panelName = substitute(panelLine.split(" = ")[0]).replace(/^"|"$/g, "");
   return {
+    panelName,
+    resetArgument: render(resetLine),
     hit: (overrides = {}) => runScript({
       argument: render(httpLine), moduleVersion: null, persistentStore,
       direction: values.direction, scriptName: "API Debug (Surge API Debug)",
       ...overrides
     }),
-    panel: (trigger = "button") => runScript({
+    panel: (trigger = "button", overrides = {}) => runScript({
       argument: render(resetLine), moduleVersion: null, persistentStore,
       direction: null, scriptName: "API-Debug-Reset (Surge API Debug)",
-      input: { purpose: "panel", panelName: "API-Debug-Reset" }, trigger
+      input: { purpose: "panel", panelName }, trigger, ...overrides
     })
   };
 }
+
+test("panels identify their own rules even when Surge selects another same-named reset script", () => {
+  const store = createPersistentStore();
+  const first = createModuleInstance(store, { hit_limit: "1" });
+  const second = createModuleInstance(store, {
+    url: "^https://example.com/messages/[0-9]{1,3}\\?x=1&foo=2|three$",
+    hit_limit: "2"
+  });
+  assert.notEqual(first.panelName, second.panelName);
+  first.hit();
+  second.hit();
+  second.hit();
+  const refresh = second.panel("auto-interval", { argument: first.resetArgument });
+  assert.ok(refresh.result.content.includes("messages/[0-9]{1,3}\\?x=1&foo=2|three$"));
+  assert.ok(refresh.result.title.includes("hit_limit=2"));
+  assert.equal(second.hit().result.body, undefined);
+  const reset = second.panel("button", { argument: first.resetArgument });
+  assert.equal(reset.result.style, "good");
+  assert.ok(reset.logs.every(line => line.includes("[response][^https://example.com/messages/")));
+  assert.equal(first.hit().result.body, undefined);
+  assert.equal(second.hit().result.body, "login");
+});
+
+test("panel identity separates directions while using one fixed reset script name", () => {
+  const store = createPersistentStore();
+  const response = createModuleInstance(store);
+  const request = createModuleInstance(store, { direction: "request" });
+  assert.notEqual(response.panelName, request.panelName);
+  response.hit();
+  request.hit();
+  const reset = request.panel("button", { argument: response.resetArgument });
+  assert.equal(reset.result.style, "good");
+  assert.ok(reset.result.content.startsWith("request"));
+  assert.equal(response.hit().result.body, undefined);
+  assert.equal(request.hit().result.body, "login");
+});
+
+test("panels display configured positive, negative and unlimited hit limits", () => {
+  for (const [hit_limit, label, description] of [
+    ["3", "3", "前 3 次生效"],
+    ["-3", "-3", "跳过前 3 次"],
+    ["0", "0", "不限次数"],
+    ["", "0", "不限次数"]
+  ]) {
+    const instance = createModuleInstance(createPersistentStore(), { hit_limit });
+    for (const trigger of ["auto-interval", "button"]) {
+      const { result } = instance.panel(trigger);
+      assert.ok(result.title.includes(`hit_limit=${label}`), result.title);
+      assert.ok(result.content.includes(description), result.content);
+    }
+  }
+});
+
+test("an incomplete scoped panel never resets the selected script's unrelated rule", () => {
+  const store = createPersistentStore();
+  const instance = createModuleInstance(store);
+  instance.hit();
+  const { result } = instance.panel("button", {
+    input: { purpose: "panel", panelName: "API-Debug-Reset|request" }
+  });
+  assert.equal(result.style, "error");
+  assert.equal(instance.hit().result.body, undefined);
+});
 
 test("every log line identifies its module rule and HTTP direction", () => {
   const store = createPersistentStore();
@@ -276,9 +343,9 @@ test("only a manual Surge panel click clears the selected direction's quota", ()
   const moduleSource = fs.readFileSync(path.join(
     __dirname, "../surge_api_debug.sgmodule"
   ), "utf8");
-  const panel = moduleSource.match(/^([^\n=]+) = title="重置次数".*script-name=([^\n,]+).*$/m);
+  const panel = moduleSource.match(/^([^\n=]+) = title="重置次数[^"\n]*".*script-name=([^\n,]+).*$/m);
   assert.ok(panel, "the reset panel is linked to a script");
-  const [, panelName, resetScriptName] = panel;
+  const [, panelNameTemplate, resetScriptName] = panel;
   const httpLine = moduleSource.split("\n").find(line => line.includes("type=http-"));
   const resetLine = moduleSource.split("\n").find(line => line.startsWith(`${resetScriptName} = type=generic,`));
   assert.ok(resetLine);
@@ -289,6 +356,8 @@ test("only a manual Surge panel click clears the selected direction's quota", ()
   const persistentStore = createPersistentStore();
   const render = (line, direction) => line.match(/\bargument="([^"]+)"/)[1]
     .replace(/\{\{\{(\w+)\}\}\}/g, (_, name) => name === "direction" ? direction : values[name]);
+  const panelName = panelNameTemplate.replace(/\{\{\{(\w+)\}\}\}/g,
+    (_, name) => name === "direction" ? "response" : values[name]).replace(/^"|"$/g, "");
   const request = direction => runScript({
     argument: render(httpLine, direction), moduleVersion: null, direction,
     scriptName: "API Debug (Surge API Debug)", persistentStore
@@ -305,7 +374,7 @@ test("only a manual Surge panel click clears the selected direction's quota", ()
   runPanel("button", { purpose: "other", panelName });
   assert.equal(request("response"), undefined);
   const reset = runPanel("button");
-  assert.equal(reset.result.title, "重置次数");
+  assert.equal(reset.result.title, "重置次数 · hit_limit=1");
   assert.equal(reset.result.style, "good");
   assert.deepEqual(reset.timers, []);
   assert.equal(request("request"), undefined);
