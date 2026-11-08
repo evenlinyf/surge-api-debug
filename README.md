@@ -6,19 +6,19 @@
 
 ## 安装
 
+正式版本从 `1.0.0` 开始，包含多模块隔离、独立重置面板、次数进度和调试日志。
+
 复制以下地址，在 Surge 的「模块」中选择从 URL 安装。这个地址始终指向最新的正式 Release。
 
 ```text
 https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule
 ```
 
-要锁定在 1.5.2，复制下面的固定版地址安装。
+要锁定在 1.0.0，复制下面的固定版地址安装。
 
 ```text
-https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.2/surge_api_debug.sgmodule
+https://github.com/evenlinyf/surge-api-debug/releases/download/v1.0.0/surge_api_debug.sgmodule
 ```
-
-旧版 [1.4.2 固定安装地址](https://github.com/evenlinyf/surge-api-debug/releases/download/v1.4.2/surge_api_debug.sgmodule) 仍可使用，但不支持多个模块的计数隔离。
 
 调试 HTTPS 时，在 Surge 中启用 MITM，并把目标域名加入 MITM 主机名列表。测试设备需要信任 Surge 的 MITM 证书。[Surge HTTP 处理文档](https://manual.nssurge.com/http/overview.html)
 
@@ -58,7 +58,7 @@ delay_ms=0
 | `value` | 写入的值。`@empty` 表示空字符串。`&` 可直接填写，也可以写成 `%26`。删除或中断等操作可填 `ignored`。 |
 | `value_type` | `string`、`number`、`boolean`、`null` 或 `json`。默认 `string`。用于 Body 写入和 Mock。 |
 | `hit_limit` | `0` 或留空表示每次生效。正数 `N` 只在前 `N` 次命中时生效，负数 `-N` 跳过前 `N` 次，从第 `N+1` 次起持续生效。 |
-| `delay_ms` | 操作生效前的额外延迟，范围为 0 至 25000 毫秒。默认 0。 |
+| `delay_ms` | 仅在操作应用时增加延迟，范围为 0 至 25000 毫秒。未命中、配置错误和次数跳过时不延迟。默认 0。 |
 
 | 操作 | 可用方向 | 可用目标 |
 | --- | --- | --- |
@@ -110,11 +110,15 @@ value_type=json
 
 URL 命中且操作条件满足时才计数。同一请求修改多个数组元素也只算一次。同一条 URL 正则匹配的不同请求共用限额，请求方向和响应方向各自计数。
 
-从 1.5.0 起，每个完整 URL 正则与方向的组合分别保存计数。换成尚未使用的 URL 正则时从头计数，切回之前的正则会继续使用它的计数。修改非零限额后，该规则下一次符合条件的请求从头计数。升级到 1.5.0 后，新计数独立于 1.4.2 的旧计数，首次命中从头开始。
+每个完整 URL 正则与方向的组合分别保存计数。换成尚未使用的 URL 正则时从头计数，切回之前的正则会继续使用它的计数。修改非零限额后，该规则下一次符合条件的请求从头计数。
 
 要重新使用同一个限额，打开 Surge 的「重置次数」信息面板，点击刷新图标 **⟳**。显示「已清零，下次命中从头计数」后，下一次命中会从第 1 次开始。`hit_limit` 保持原值。Mac 从 Surge 菜单栏的「面板」进入，iOS 在策略选择页查看。[Surge 信息面板文档](https://manual.nssurge.com/tools/panel.html#dynamic-mode)
 
-面板标题会显示配置的 `hit_limit`（例如 `重置次数 · hit_limit=3`），正文注明 URL 正则、`request` / `response` 方向及次数含义：正数为前 N 次生效，负数为跳过前 N 次，`0` 或留空为不限次数。点击刷新只清零该组合的计数，不影响其他接口或另一个方向。自动刷新面板只更新提示，不会清零。
+面板标题会显示配置的 `hit_limit`（例如 `重置次数 · hit_limit=3`），正文注明 URL 正则、`request` / `response` 方向及次数含义：正数为前 N 次生效，负数为跳过前 N 次，`0` 或留空为不限次数。
+
+面板还会只读显示当前进度：正数为“已生效 2 次，剩余 1 次”，负数为“已跳过 2/3 次”或“已进入持续生效阶段”，不限次数时明确显示“不记录次数”。
+
+修改非零限额后，面板会显示新序列的零进度，实际计数在下一次符合条件的请求时开始。点击刷新只清零该组合的计数，不影响其他接口或另一个方向。自动刷新不消耗次数、不清零。存储不可用或计数损坏时显示错误，不会假装次数为零；损坏状态可点刷新清零恢复。
 
 ![Surge Mac 菜单栏中「面板 → 重置次数」的入口](assets/iShot_2026-11-08_00.57.56.png)
 
@@ -122,9 +126,9 @@ URL 命中且操作条件满足时才计数。同一请求修改多个数组元�
 
 ## 多个模块修改不同接口
 
-从 1.5.1 起，模块在 Surge 中归入 `Dev` 分类。
+模块在 Surge 中归入 `Dev` 分类。
 
-从 1.5.0 起，可以多次安装同一份 Module，分别修改不同接口，共用一份 JS。给安装链接添加不同的查询参数即可创建独立实例，例如：
+可以多次安装同一份 Module，分别修改不同接口，共用一份 JS。给安装链接添加不同的查询参数即可创建独立实例，例如：
 
 ```text
 https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule?name=login
@@ -145,22 +149,24 @@ https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_
 | `hit_limit` | `1` | `3` |
 | `delay_ms` | `0` | `0` |
 
-从 1.5.2 起，面板标识根据 URL 正则、方向和 `hit_limit` 自动生成；固定名称的 reset 脚本通过当前面板标识读取重置属性，不再依赖同名脚本实例传入的另一份配置，无需手填模块名称。修改配置后会生成相应的新面板标识，点击前请核对显示的接口和次数。升级时请将各实例的 Module 和 JS 一起更新。
+面板标识根据 URL 正则、方向和 `hit_limit` 自动生成；固定名称的 reset 脚本通过当前面板标识读取重置属性，不再依赖同名脚本实例传入的另一份配置，无需手填模块名称。修改配置后会生成相应的新面板标识，点击前请核对显示的接口和次数。升级时请将各实例的 Module 和 JS 一起更新。
 
 两个模块可以同时启用，各自计数，各自重置。判断计数是否共用的依据是配置中的完整 `url` 正则和方向，与安装链接的 `name` 无关。若两份配置的 URL 正则和方向相同，则共用计数和重置范围。
 
 每行脚本日志也会标明方向和完整 URL 正则，便于区分不同接口；重置日志使用该面板配置的方向与正则。例如：
 
 ```text
-[Surge API Debug][response][^https://api\.example\.com/v1/login$] hit 1/1 applied
-[Surge API Debug][response][^https://api\.example\.com/v1/messages$] hit 1/3 applied
+[Surge API Debug][response][^https://api\.example\.com/v1/login$] [状态] hit 1/1 applied
+[Surge API Debug][response][^https://api\.example\.com/v1/messages$] [状态] hit 1/3 applied
 ```
 
-若脚本没有收到 URL 正则，日志会显示 `unconfigured`。
+日志会使用 `[已应用]`、`[已跳过]`、`[配置错误]`、`[执行错误]` 和 `[状态]` 标记结果。数组筛选会报告 `matched/changed/skipped` 数量及跳过原因；次数用尽会报告剩余次数，参数类型错误会附上配置示例。若脚本没有收到 URL 正则，日志会显示 `unconfigured`。
 
 每份模块仍只有一组 `path` 和 `value`。本功能用于不同接口；同一方向只执行第一个匹配的 HTTP 脚本，多个正则不要重叠，不能依靠多份模块同时修改同一接口的不同字段。[Surge HTTP 脚本说明](https://manual.nssurge.com/scripting/http-request.html)
 
 ## 排查
+
+`value` 中的合法百分号转义只解码一次，可与普通百分号混用，例如 `100% ready A%26B` 得到 `100% ready A&B`。要保留字面量 `%26`，写 `%2526`；无效 UTF-8 转义片段保持原样。`path` 和 URL 正则不会随 `value` 解码，筛选中的引号、`&` 和 `%` 按原值匹配。
 
 - 完全没有触发时，确认 Module 已启用、URL 和方向正确。HTTPS 还要检查 MITM。同一方向只会运行第一个匹配的脚本。
 - 已触发但没改动时，查看请求的 Notes，确认 JSON 路径命中、字段类型正确、次数还有剩余。Module 的 Body 大小上限为 4 MiB。
@@ -198,7 +204,7 @@ node --test scripts/coverage-api-debug.js
 ```sh
 node scripts/check-release.js
 # 手动打 tag 时，还可验证指定 tag 与源码一致：
-node scripts/check-release.js v1.5.2
+node scripts/check-release.js v1.0.0
 ```
 
 最新版安装地址保持不变。[GitHub Release 链接说明](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)

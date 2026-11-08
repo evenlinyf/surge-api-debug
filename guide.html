@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Surge API Debug 使用指南：参数、字段修改、筛选、故障模拟、生效次数和多模块配置。"><title>Surge API Debug 使用指南</title><style>*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:100px}body{margin:0;background:#f5f7fb;color:#172033;font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}a{color:#1558cc;text-underline-offset:3px}a:hover{text-decoration-thickness:2px}a:focus-visible{outline:3px solid #1558cc;outline-offset:4px;border-radius:3px}.skip-link{position:absolute;left:16px;top:-60px;background:white;padding:8px;z-index:10}.skip-link:focus{top:12px}.shell{max-width:1080px;margin:auto;padding:40px 28px 64px}header{margin-bottom:28px}.eyebrow{color:#53657d;font-size:13px;letter-spacing:.06em}h1{font-size:clamp(30px,5vw,44px);line-height:1.2;margin:10px 0 16px}h2{font-size:23px;line-height:1.4;margin:0 0 18px}h3{font-size:17px;line-height:1.5;margin:20px 0 10px}p{margin:10px 0 16px}.intro{max-width:780px;color:#53657d}.top-links{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0}.toc{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:6px;background:#f5f7fbf5;border-bottom:1px solid #dce3ef;padding:12px 0;margin:0 0 22px;backdrop-filter:blur(8px)}.toc a{padding:5px 10px;background:white;border:1px solid #dce3ef;border-radius:7px;font-size:14px;text-decoration:none}.section{margin:22px 0;scroll-margin-top:110px}.card{padding:28px;background:white;border:1px solid #dce3ef;border-radius:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 24px}.grid>div{min-width:0}.mini-card{padding:12px 16px;background:#f5f7fb;border-radius:8px}.mini-card h3{margin-top:0}.mini-card p{margin-bottom:0}code,pre{font:14px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace}code{background:#edf2fa;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{margin:12px 0 20px;padding:18px;border:1px solid #dce3ef;border-radius:8px;background:#f5f7fb;overflow:auto;tab-size:2}pre code{padding:0;background:none}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid #e3e8f0}th{background:#f5f7fb;font-weight:600}td:first-child{white-space:nowrap}.note{padding:14px 18px;background:#edf4ff;border-left:3px solid #2764d2;border-radius:0 6px 6px 0;margin:18px 0;font-size:14px}footer{margin-top:28px;color:#617089;font-size:14px}.badge{display:inline-block;background:#e7efff;color:#174c9e;border-radius:20px;padding:3px 10px;font-size:13px}@media(max-width:700px){.shell{padding:24px 14px 40px}.card{padding:20px 16px}.grid{grid-template-columns:1fr}.toc{position:static}html{scroll-padding-top:20px}h2{font-size:21px}th,td{padding:10px}pre{padding:14px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}@media print{body{background:white}.shell{max-width:none;padding:0}.toc,.skip-link{display:none}.card{border:0;padding:0}.section{break-inside:avoid}pre{white-space:pre-wrap;overflow-wrap:anywhere}}</style></head><body>
 <a class="skip-link" href="#main-content">跳到主要内容</a><div class="shell">
-<header><p class="eyebrow">SURGE API DEBUG · 使用指南</p><h1>接口调试，从一条规则开始。</h1><p class="intro">修改请求与响应，模拟异常，并控制故障生效次数。此指南是独立 HTML 文件，下载或 clone 后直接用浏览器打开即可阅读。</p><span class="badge">适用源码版本 1.5.2</span><p class="intro">安装以所选 Release 的版本为准；多模块计数隔离需要 1.5.0 或更新版本。</p><div class="top-links"><a href="https://github.com/evenlinyf/surge-api-debug">GitHub 仓库</a><a href="https://github.com/evenlinyf/surge-api-debug/releases">版本发布</a></div></header>
+<header><p class="eyebrow">SURGE API DEBUG · 使用指南</p><h1>接口调试，从一条规则开始。</h1><p class="intro">修改请求与响应，模拟异常，并控制故障生效次数。此指南是独立 HTML 文件，下载或 clone 后直接用浏览器打开即可阅读。</p><span class="badge">适用源码版本 1.0.0</span><p class="intro">安装以所选 Release 的版本为准；当前版本包含多模块计数隔离。</p><div class="top-links"><a href="https://github.com/evenlinyf/surge-api-debug">GitHub 仓库</a><a href="https://github.com/evenlinyf/surge-api-debug/releases">版本发布</a></div></header>
 <nav class="toc" aria-label="指南目录"><a href="#start">开始使用</a><a href="#params">参数</a><a href="#matrix">合法组合</a><a href="#body">Body</a><a href="#http">Header / URL / Status</a><a href="#special">故障模拟</a><a href="#hit-limit">生效次数</a><a href="#multiple">多个模块</a><a href="#version">版本</a><a href="#troubleshooting">排查</a></nav>
 <main id="main-content" tabindex="-1">
 <section class="section doc" id="start"><div class="card">
@@ -216,8 +216,9 @@ action=set
 path=$
 value=500
 delay_ms=5000</pre>
-<div class="note"><code>delay_ms</code> 是独立修饰参数，可与 set / format / remove / mock / abort 组合。</div>
+<div class="note"><code>delay_ms</code> 是独立修饰参数，可与 set / format / remove / mock / abort 组合。仅在操作应用时延迟，未命中、配置错误和次数跳过时不延迟。</div>
 <h3 id="hit-limit">限制生效次数</h3>
+<p>面板只读显示当前进度：正数为“已生效 N 次，剩余 M 次”，负数为“已跳过 N/M 次”或“已进入持续生效阶段”，不限次数为“不记录次数”。自动刷新不消耗次数、不清零；存储异常会显示错误，计数损坏可手动刷新清零恢复。</p>
 <p>例如，只让匹配接口的前 3 次响应返回 500。要跳过前 3 次，从第 4 次起持续返回 500，把下例的 <code>hit_limit</code> 改成 <code>-3</code>。</p>
 <pre>url=https://api.example.com/api/profile
 direction=response
@@ -229,14 +230,14 @@ value_type=number
 hit_limit=3</pre>
 <p>Surge 先按 URL 匹配，脚本再确认操作是否适用。筛选没有匹配项、路径不可写、要删除的字段或 Header 不存在时不计数。一个请求即使修改多个数组元素，也只算一次。因次数限制跳过的请求直接放行，配置的延迟也不执行。</p>
 <p><strong>重置次数</strong>在 Surge 信息面板中打开「重置次数」并点一下刷新图标，看到「已清零，下次命中从头计数」即可。Mac 从 Surge 菜单栏的「面板」进入，iOS 在策略选择页查看。<code>hit_limit</code> 保持原值，面板会显示对应的 URL 正则与方向，点击时只清除这一组合的计数，其他接口和方向不受影响。重新打开面板时会恢复操作提示；自动刷新提示不会清零。<a href="https://manual.nssurge.com/tools/panel.html#dynamic-mode">Surge 信息面板文档</a></p>
-<p>1.5.0 起，每个完整 URL 正则与方向的组合单独保存计数。使用新的正则时从头开始，切回之前的正则则继续它的原有计数。修改非零限额后，该规则下一次符合条件的请求从头计数。升级至 1.5.0 后首次使用新计数，不继承 1.4.2 的旧计数。同一条正则匹配的不同请求地址共用限额。请求和响应各自计数，关闭再开启 Module 或只修改路径、值等参数会保留计数。也可以把 <code>hit_limit</code> 改成 <code>0</code>，发一条满足条件的请求清零，再改回限额。清零的这条请求会执行操作。</p>
+<p>每个完整 URL 正则与方向的组合单独保存计数。使用新的正则时从头开始，切回之前的正则则继续它的原有计数。修改非零限额后，该规则下一次符合条件的请求从头计数。同一条正则匹配的不同请求地址共用限额。请求和响应各自计数，关闭再开启 Module 或只修改路径、值等参数会保留计数。也可以把 <code>hit_limit</code> 改成 <code>0</code>，发一条满足条件的请求清零，再改回限额。清零的这条请求会执行操作。</p>
 <div class="note">顺序请求按上述次数执行。多个请求同时命中时，Surge 的持久化接口没有提供原子计数操作，结果可能与设定次数有出入。<a href="https://manual.nssurge.com/scripting/api.html#persistentstore">Surge 脚本 API</a></div>
 </div>
 </section>
 <section class="section doc" id="multiple"><div class="card">
 <h2>6. 多个模块修改不同接口</h2>
-<p>从 1.5.2 起，面板根据 URL 正则、方向和 hit_limit 自动生成唯一标识，点击时由固定名称的 reset 脚本还原对应的重置属性，无需填写额外名称。标题显示配置的 hit_limit，正文显示接口、方向和次数含义。各实例的 Module 和 JS 需一起更新。</p>
-<p>从 1.5.1 起，模块在 Surge 中归入 <code>Dev</code> 分类。</p>
+<p>面板根据 URL 正则、方向和 hit_limit 自动生成唯一标识，点击时由固定名称的 reset 脚本还原对应的重置属性，无需填写额外名称。标题显示配置的 hit_limit，正文显示接口、方向和次数含义。各实例的 Module 和 JS 需一起更新。</p>
+<p>模块在 Surge 中归入 <code>Dev</code> 分类。</p>
 <p>给安装链接添加不同的查询参数，可以安装多个独立实例。它们共用一份 JS，在 Surge 中分别填写各自的接口 URL 和修改内容：</p>
 <pre>https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule?name=login
 https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule?name=messages</pre>
@@ -251,7 +252,7 @@ https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_
 <tr><td>hit_limit</td><td>1</td><td>3</td></tr>
 <tr><td>delay_ms</td><td>0</td><td>0</td></tr>
 </tbody></table></div>
-<p>从 1.5.0 起，按完整 URL 正则和方向隔离计数、重置范围。不同安装链接若填写相同正则和方向，仍共用计数。一次请求匹配同一正则的不同具体 URL，也共用该正则的限额。</p>
+<p>按完整 URL 正则和方向隔离计数、重置范围。不同安装链接若填写相同正则和方向，仍共用计数。一次请求匹配同一正则的不同具体 URL，也共用该正则的限额。</p>
 <div class="note">此功能用于不同接口，正则不要重叠。同一方向只运行首个匹配的 HTTP 脚本；一份模块仍只有一组 path / value，暂不支持通过多个模块同时修改同一接口的不同字段。</div>
 </div></section>
 <section class="section doc" id="version"><div class="card">
@@ -260,21 +261,23 @@ https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_
 <h3>最新正式版</h3>
 <pre>https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule</pre>
 <h3>固定版本</h3>
-<pre>https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.2/surge_api_debug.sgmodule</pre>
-<p>固定版本需在对应 Release 发布后使用。旧版 <a href="https://github.com/evenlinyf/surge-api-debug/releases/download/v1.4.2/surge_api_debug.sgmodule">1.4.2</a> 可继续安装，但不具备 1.5.0 的多模块计数隔离。所有已发布版本见 <a href="https://github.com/evenlinyf/surge-api-debug/releases">Releases</a>。</p>
+<pre>https://github.com/evenlinyf/surge-api-debug/releases/download/v1.0.0/surge_api_debug.sgmodule</pre>
+<p>正式版本从 1.0.0 开始，包含多模块隔离、独立重置面板、次数进度和调试日志。固定版本需在对应 Release 发布后使用。所有已发布版本见 <a href="https://github.com/evenlinyf/surge-api-debug/releases">Releases</a>。</p>
 <p>Module 和 JS 的版本需要一致。安装 Module 后，Surge 会自动下载它指定的 JS：</p>
-<pre>script-path=https://raw.githubusercontent.com/evenlinyf/surge-api-debug/v1.5.2/surge_api_debug.js
-module_version=1.5.2</pre>
-<p>版本一致时日志包含 <code>script_version=1.5.2, module_version=1.5.2</code>。版本缺失或不一致时保持请求或响应不变，日志会提示 <code>version mismatch</code>；重新安装配套版本即可。</p>
+<pre>script-path=https://raw.githubusercontent.com/evenlinyf/surge-api-debug/v1.0.0/surge_api_debug.js
+module_version=1.0.0</pre>
+<p>版本一致时日志包含 <code>script_version=1.0.0, module_version=1.0.0</code>。版本缺失或不一致时保持请求或响应不变，日志会提示 <code>version mismatch</code>；重新安装配套版本即可。</p>
 </div></section>
 
 <section class="section doc" id="troubleshooting">
 <div class="card">
 <h2>8. 排查</h2>
+<p>日志使用 [已应用]、[已跳过]、[配置错误]、[执行错误] 和 [状态] 标记结果。筛选修改会列出 matched/changed/skipped 数量及跳过原因；配置错误会给出参数示例。</p>
+<p>value 中合法的百分号转义只解码一次，可与普通百分号混用：<code>100% A%26B</code> 得到 <code>100% A&amp;B</code>。保留字面量 <code>%26</code> 时写 <code>%2526</code>；无效 UTF-8 转义保持原样。path 和 URL 正则不参与 value 解码。</p>
 <div class="grid">
 <div class="mini-card"><h3>没命中</h3><p>检查 url、direction 与 MITM。</p></div>
 <div class="mini-card"><h3>字段没改</h3><p>检查 path 是否匹配真实 JSON。</p></div>
-<div class="mini-card"><h3>次数没重置</h3><p>确认安装了 1.4.1 或更高版本，在「重置次数」面板手动点刷新并查看结果。</p></div>
+<div class="mini-card"><h3>次数没重置</h3><p>在对应接口的「重置次数」面板手动点刷新并查看结果。</p></div>
 <div class="mini-card"><h3>value 异常</h3><p>检查 value_type；<code>&amp;</code> 可直接输入，或写成 <code>%26</code>。普通百分号无需处理。</p></div>
 <div class="mini-card"><h3>确认执行</h3><p>在 Script / Notes 查看 [Surge API Debug] 日志。</p></div>
 </div>

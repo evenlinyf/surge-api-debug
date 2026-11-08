@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const CURRENT_VERSION = "1.5.2";
+const CURRENT_VERSION = "1.0.0";
 
 const scriptSource = fs.readFileSync(
   path.join(__dirname, "../surge_api_debug.js"),
@@ -101,6 +101,151 @@ function createModuleInstance(persistentStore, options = {}) {
     })
   };
 }
+
+test("unapplied operations never delay even with an explicit unlimited hit limit", () => {
+  for (const argument of [
+    "target=body&action=set&path=data.missing&value=x&value_type=string",
+    "target=body&action=remove&path=missing",
+    "target=body&action=set&path=items[?(@.id == 9)].text&value=x",
+    "target=body&action=set&path=$&value=oops&value_type=json",
+    "target=header&action=remove&path=X-Missing",
+    "target=status&action=set&value=oops",
+    "target=body&action=unknown"
+  ]) {
+    const { timers } = runScript({
+      argument: `${argument}&hit_limit=0&delay_ms=5000`,
+      body: '{"items":[]}'
+    });
+    assert.deepEqual(timers, [], argument);
+  }
+  assert.deepEqual(runScript({
+    argument: "target=body&path=$&value=x&hit_limit=0&delay_ms=5000",
+    moduleVersion: "old"
+  }).timers, []);
+});
+
+test("positive panel progress reads used and remaining counts without consuming quota", () => {
+  const store = createPersistentStore();
+  const module = createModuleInstance(store, { hit_limit: "3" });
+  assert.ok(module.panel("auto-interval").result.content.includes("已生效 0 次，剩余 3 次"));
+  module.hit();
+  assert.ok(module.panel("auto-interval").result.content.includes("已生效 1 次，剩余 2 次"));
+  assert.ok(module.panel("auto-interval").result.content.includes("已生效 1 次，剩余 2 次"));
+  module.hit(); module.hit();
+  assert.ok(module.panel("auto-interval").result.content.includes("已生效 3 次，剩余 0 次"));
+  assert.equal(module.hit().result.body, undefined);
+  const reset = module.panel();
+  assert.ok(reset.result.content.includes("已生效 0 次，剩余 3 次"));
+  assert.equal(module.hit().result.body, "login");
+});
+
+test("negative panel progress shows skipped hits and the continuous phase", () => {
+  const module = createModuleInstance(createPersistentStore(), { hit_limit: "-2" });
+  assert.ok(module.panel("auto-interval").result.content.includes("已跳过 0/2 次"));
+  assert.equal(module.hit().result.body, undefined);
+  assert.ok(module.panel("auto-interval").result.content.includes("已跳过 1/2 次"));
+  assert.equal(module.hit().result.body, undefined);
+  assert.ok(module.panel("auto-interval").result.content.includes("已进入持续生效阶段"));
+  assert.equal(module.hit().result.body, "login");
+  assert.ok(module.panel().result.content.includes("已跳过 0/2 次"));
+});
+
+test("panel progress belongs to its own identity and changed limits start at zero", () => {
+  const store = createPersistentStore();
+  const first = createModuleInstance(store, { hit_limit: "3" });
+  const second = createModuleInstance(store, { url: "^https://example.com/messages$", hit_limit: "3" });
+  first.hit();second.hit();second.hit();
+  const panel = second.panel("auto-interval", { argument: first.resetArgument });
+  assert.ok(panel.result.content.includes("已生效 2 次，剩余 1 次"));
+  const changed = createModuleInstance(store, { hit_limit: "2" });
+  assert.ok(changed.panel("auto-interval").result.content.includes("已生效 0 次，剩余 2 次"));
+  assert.ok(first.panel("auto-interval").result.content.includes("已生效 1 次，剩余 2 次"));
+});
+
+test("panel storage errors are explicit while unlimited mode remains untracked", () => {
+  const unavailable = { read() { throw new Error("unavailable"); }, write() { return false; } };
+  for (const store of [undefined, unavailable]) {
+    const limited = createModuleInstance(store);
+    const panel = limited.panel("auto-interval").result;
+    assert.equal(panel.style, "error");
+    assert.ok(panel.content.includes("计数存储不可用"));
+    const unlimited = createModuleInstance(store, { hit_limit: "0" });
+    assert.equal(unlimited.panel("auto-interval").result.style, "info");
+    assert.ok(unlimited.panel("auto-interval").result.content.includes("不记录次数"));
+  }
+});
+
+test("a corrupt panel counter reports a recovery action and manual reset restores progress", () => {
+  const store = createPersistentStore();
+  const key = "surge-api-debug-hits-v3-module-response-" + encodeURIComponent("^https://example.com/login$");
+  for (const saved of ["not json", JSON.stringify({ count: 99, limit: 1, urlPattern: "x" })]) {
+    store.write(saved,key);
+    const module = createModuleInstance(store);
+    const panel = module.panel("auto-interval").result;
+    assert.equal(panel.style, "error");
+    assert.ok(panel.content.includes("计数状态损坏"));
+    assert.ok(panel.content.includes("刷新清零"));
+    assert.equal(store.read(key), saved);
+    assert.equal(module.panel().result.style, "good");
+    assert.ok(module.panel("auto-interval").result.content.includes("已生效 0 次，剩余 1 次"));
+  }
+});
+
+test("logs distinguish application, exhausted quotas and invalid configuration", () => {
+  const module = createModuleInstance(createPersistentStore());
+  assert.ok(module.hit().logs.some(line => line.includes("[已应用]")));
+  assert.ok(module.hit().logs.some(line => line.includes("[已跳过]") && line.includes("剩余 0")));
+  const invalid = createModuleInstance(createPersistentStore(), { hit_limit: "bad" }).hit();
+  assert.ok(invalid.logs.some(line => line.includes("[配置错误]") && line.includes("示例")));
+});
+
+test("invalid typed values and mismatched versions identify the configuration to fix", () => {
+  for (const [value_type,value] of [["number","oops"],["boolean","maybe"],["json","{"],["unknown","x"]]) {
+    const {logs,result} = runScript({argument:`target=body&path=$&value=${value}&value_type=${value_type}`});
+    assert.deepEqual(Object.keys(result),[]);
+    assert.ok(logs.some(line => line.includes("[配置错误]") && line.includes("value_type") && line.includes("示例")));
+  }
+  const {logs} = runScript({argument:"target=body&path=$&value=x",moduleVersion:"old"});
+  assert.ok(logs.some(line => line.includes("[配置错误]") && line.includes("version mismatch")));
+});
+
+test("filtered logs explain both partial changes and zero matching items", () => {
+  const argument = "target=body&action=format&path=items[?(@.id == 1)].text&value=pre${old}&value_type=string";
+  const partial = runScript({ argument, body: JSON.stringify({ items: [
+    { id:1, text:"x" }, { id:1, text:42 }, { id:1 }, { id:2, text:"keep" }
+  ] }) });
+  assert.equal(JSON.parse(partial.result.body).items[0].text, "prex");
+  assert.ok(partial.logs.some(line => line.includes("[已应用]") && line.includes("matched=3, changed=1, skipped=2")));
+  const empty = runScript({ argument, body:'{"items":[]}' });
+  assert.ok(empty.logs.some(line => line.includes("[已跳过]") && line.includes("filter matched 0")));
+  const header = runScript({ argument:"target=header&action=remove&path=X-Missing" });
+  assert.ok(header.logs.some(line => line.includes("[已跳过]") && line.includes("X-Missing")));
+});
+
+test("Module JSON values retain quotes, ampersands and parameter-looking text with mixed percent signs", () => {
+  const value = JSON.stringify({
+    text:'100% ready &value_type=number&hit_limit=99',
+    quoted:'He said "hello"', literal:'%2526', unicode:'%E4%B8%AD',
+    url:'https://example.invalid/?x=1&delay_ms=999'
+  });
+  const module = createModuleInstance(createPersistentStore(), {
+    path:'items[?(@.key == "A&B%26")].content', value, value_type:"json", delay_ms:"17"
+  });
+  const first = module.hit({ body:JSON.stringify({items:[{key:"A&B%26",content:null}]}) });
+  assert.deepEqual(JSON.parse(first.result.body).items[0].content, {
+    text:'100% ready &value_type=number&hit_limit=99', quoted:'He said "hello"',
+    literal:'%26', unicode:'中', url:'https://example.invalid/?x=1&delay_ms=999'
+  });
+  assert.deepEqual(first.timers,[17]);
+  assert.equal(module.hit({body:'{"items":[{"key":"A&B%26","content":null}]}'}).result.body,undefined);
+});
+
+test("value decoding preserves malformed UTF-8 while decoding separate valid escapes once", () => {
+  const { result } = runScript({
+    argument:"target=body&path=$&value=bad %E0%A4%A / A%26B / %2526 / 100%&value_type=string"
+  });
+  assert.equal(result.body,"bad %E0%A4%A / A&B / %26 / 100%");
+});
 
 test("panels identify their own rules even when Surge selects another same-named reset script", () => {
   const store = createPersistentStore();
@@ -616,14 +761,14 @@ test("mismatched module version skips mutation", () => {
     argument:
       "target=body&action=set&path=data.version&value=changed&value_type=string&delay_ms=0",
     body: JSON.stringify({ data: { version: "before" } }),
-    moduleVersion: "1.0.0"
+    moduleVersion: "0.9.0"
   });
 
   assert.deepEqual(Object.keys(result), []);
   assert.ok(
     logs.some(message =>
       message.includes(
-        `version mismatch: script=${CURRENT_VERSION}, module=1.0.0`
+        `version mismatch: script=${CURRENT_VERSION}, module=0.9.0`
       )
     )
   );

@@ -2,7 +2,7 @@
  * surge_api_debug.js
  *
  * 通用 Surge API 调试 / 故障注入脚本。
- * Script Version: 1.5.2
+ * Script Version: 1.0.0
  *
  * Module 参数：
  *   url         由 Module 的 pattern 匹配，按完整正则与方向分别计数和重置
@@ -36,7 +36,7 @@
  */
 
 const PREFIX = "[Surge API Debug]";
-const SCRIPT_VERSION = "1.5.2";
+const SCRIPT_VERSION = "1.0.0";
 
 const args = parseArguments(
   typeof $argument === "string" ? $argument : ""
@@ -79,7 +79,7 @@ function main() {
     if (moduleVersion !== SCRIPT_VERSION) {
       log(
         `version mismatch: script=${SCRIPT_VERSION}, ` +
-        `module=${moduleVersion || "missing"}; passthrough`
+        `module=${moduleVersion || "missing"}; passthrough; 请更新配套的 Module 和 JS`, "配置错误"
       );
       return finish({});
     }
@@ -92,7 +92,7 @@ function main() {
     if (target === "reset") return handleResetPanel();
 
     if (!Number.isSafeInteger(hitLimit)) {
-      return invalid("hit_limit must be an integer");
+      return invalid("hit_limit must be an integer", "hit_limit=0、3 或 -3");
     }
 
     if (rawValue === "@empty") {
@@ -116,7 +116,7 @@ function main() {
     }
 
     if (action !== "set" && action !== "format" && action !== "remove") {
-      return invalid(`unsupported action: ${action}`);
+      return invalid(`unsupported action: ${action}`, "action=set/format/remove/mock/abort");
     }
 
     if (action === "format" && target !== "body") {
@@ -137,13 +137,13 @@ function main() {
         return handleStatus();
 
       default:
-        return invalid(`unsupported target: ${target}`);
+        return invalid(`unsupported target: ${target}`, "target=body/header/url/status");
     }
   } catch (error) {
     log(
       `error: ${
         error && error.stack ? error.stack : String(error)
-      }`
+      }`, error?.name === "ConfigurationError" ? "配置错误" : "执行错误"
     );
     return finish({});
   }
@@ -181,7 +181,7 @@ function handleBody() {
 
     const result = removeAtPath(json.value, tokens);
     if (!result.ok) {
-      log(result.message);
+      log(result.message, "已跳过");
       return finish({});
     }
 
@@ -221,7 +221,7 @@ function handleBody() {
     ? formatAtPath(json.value, tokens, value)
     : setAtPath(json.value, tokens, value);
   if (!result.ok) {
-    log(result.message);
+    log(result.message, "已跳过");
     return finish({});
   }
 
@@ -246,6 +246,7 @@ function handleHeader() {
 
   if (action === "remove") {
     if (!removeHeader(headers, path)) {
+      log(`header not found: ${path}; Header 不存在，本次不计数`, "已跳过");
       return finish(hitLimit === 0 ? { headers } : {});
     }
     return applyHit({ headers }, `removed header: ${path}`);
@@ -348,7 +349,7 @@ function parseBodyJson() {
 
   if (body == null) {
     log(
-      "body unavailable; confirm requires-body=true and the body is text"
+      "body unavailable; confirm requires-body=true and the body is text; 请检查 requires-body 和 Body 内容", "已跳过"
     );
     return { ok: false };
   }
@@ -359,7 +360,7 @@ function parseBodyJson() {
       value: JSON.parse(body)
     };
   } catch (error) {
-    log(`body is not valid JSON: ${error}`);
+    log(`body is not valid JSON: ${error}; 接口 Body 不是有效 JSON，保持原样`, "已跳过");
     return { ok: false };
   }
 }
@@ -388,7 +389,7 @@ function parsePath(input) {
   try {
     return parseSimplePath(input, false);
   } catch (error) {
-    log(`invalid JSON path: ${error.message}`);
+    log(`invalid JSON path: ${error.message}; 示例：data.name 或 items[0].name`, "配置错误");
     return [];
   }
 }
@@ -407,7 +408,7 @@ function handleFilteredBody(root, value) {
       return invalid(`array index must use [n]: ${path}`);
     }
     if (current == null || !Object.prototype.hasOwnProperty.call(current, token)) {
-      log(`no matching JSON path: ${path}`);
+      log(`no matching JSON path: ${path}; filter parent path not found，筛选数组的父路径不存在`, "已跳过");
       return finish({});
     }
     current = current[token];
@@ -419,11 +420,12 @@ function handleFilteredBody(root, value) {
 
   const matched = current.filter(item => matchesFilter(selection.expression, item));
   if (!matched.length) {
-    log(`no matching JSON path: ${path}`);
+    log(`no matching JSON path: ${path}; filter matched 0 item(s)，筛选条件未命中`, "已跳过");
     return finish({});
   }
 
   let changed = 0;
+  const skippedReasons = new Set();
   for (const item of matched) {
     const result = action === "remove"
       ? removeAtPath(item, selection.suffix)
@@ -433,18 +435,21 @@ function handleFilteredBody(root, value) {
     if (!result.ok) {
       // Selected objects can have different shapes. A missing suffix in one
       // object must not prevent changes to the other selected objects.
+      skippedReasons.add(result.message);
       continue;
     }
     changed++;
   }
 
   if (!changed) {
-    log(`no matching JSON path: ${path}`);
+    log(`no matching JSON path: ${path}; matched=${matched.length}, changed=0, skipped=${matched.length}; ${[...skippedReasons].join("; ")}`, "已跳过");
     return finish({});
   }
   return applyHit(
     { body: JSON.stringify(root) },
-    `${path} ${action === "remove" ? "removed from" : "set on"} ${changed} item(s)`
+    `${path} ${action === "remove" ? "removed from" : "set on"} ${changed} item(s); ` +
+    `matched=${matched.length}, changed=${changed}, skipped=${matched.length - changed}` +
+    (skippedReasons.size ? `; 跳过原因：${[...skippedReasons].join("; ")}` : "")
   );
 }
 
@@ -752,11 +757,12 @@ function removeAtPath(root, tokens) {
 // ---------------------------------------------------------------------------
 
 function decodeURIComponentSafe(value) {
-  try {
-    return decodeURIComponent(value);
-  } catch (_) {
-    return value;
-  }
+  // Decode each encoded run once. A literal '%' must not block other valid
+  // escapes, and malformed UTF-8 is preserved rather than replaced or dropped.
+  return value.replace(/(?:%[0-9a-f]{2})+/gi, encoded => {
+    try { return decodeURIComponent(encoded); }
+    catch (_) { return encoded; }
+  });
 }
 
 function parseTypedValue(value, type) {
@@ -768,8 +774,8 @@ function parseTypedValue(value, type) {
       const number = Number(value);
 
       if (!Number.isFinite(number)) {
-        throw new Error(
-          `invalid number value: ${value}`
+        throw invalidValue(
+          `invalid number value: ${value}; 示例：value=123&value_type=number`
         );
       }
 
@@ -785,23 +791,32 @@ function parseTypedValue(value, type) {
         return false;
       }
 
-      throw new Error(
-        `invalid boolean value: ${value}`
+      throw invalidValue(
+        `invalid boolean value: ${value}; 示例：value=true&value_type=boolean`
       );
 
     case "null":
       return null;
 
     case "json":
-      return JSON.parse(value);
+      try { return JSON.parse(value); }
+      catch (error) {
+        throw invalidValue(`invalid JSON value: ${error.message}; 示例：value={"code":0}&value_type=json`);
+      }
 
     default:
-      throw new Error(
-        `unsupported value_type: ${type}`
+      throw invalidValue(
+        `unsupported value_type: ${type}; 示例：value_type=string/number/boolean/null/json`
       );
   }
 }
 
+
+function invalidValue(message) {
+  const error = new Error(message);
+  error.name = "ConfigurationError";
+  return error;
+}
 
 function describeValue(value) {
   if (value === null) {
@@ -1004,23 +1019,23 @@ function unicodeLength(value) {
   ).length;
 }
 
-function invalid(message) {
-  log(`invalid config: ${message}`);
+function invalid(message, example) {
+  log(`invalid config: ${message}` + (example ? `; 示例：${example}` : ""), "配置错误");
   return finish({});
 }
 
-function log(message) {
+function log(message, outcome = "状态") {
   const ruleDirection = target === "reset"
     ? (panelScope ? panelScope.direction : (args.direction || "unknown"))
     : direction;
   console.log(
-    `${PREFIX}[${ruleDirection}][${urlPattern || "unconfigured"}] ${message}`
+    `${PREFIX}[${ruleDirection}][${urlPattern || "unconfigured"}] [${outcome}] ${message}`
   );
 }
 
 function applyHit(result, message) {
   if (!allowHit()) return finish({});
-  log(message);
+  log(message, "已应用");
   return finish(result, true);
 }
 
@@ -1038,20 +1053,52 @@ function handleResetPanel() {
 
   const title = `重置次数 · hit_limit=${hitLimitText || "0"}`;
   const ruleDirection = panelScope ? panelScope.direction : args.direction;
-  const limitInfo = hitLimit > 0 ? `前 ${hitLimit} 次生效`
-    : hitLimit < 0 ? `跳过前 ${-hitLimit} 次，之后持续生效` : "不限次数";
-  const scope = `${ruleDirection} · ${urlPattern}\n${limitInfo}\n`;
-  if (typeof $trigger === "undefined" || $trigger !== "button") {
-    return $done({ title, content: `${scope}点刷新清零此接口的生效次数`, style: "info" });
-  }
-
+  const scope = `${ruleDirection} · ${urlPattern}\n`;
   const validRule = urlPattern && Number.isSafeInteger(hitLimit)
     && (ruleDirection === "request" || ruleDirection === "response");
-  const cleared = validRule && resetHitCounter(hitCounterKey(ruleDirection));
+  if (!validRule) {
+    return $done({ title, content: `${scope}配置无效：请检查 URL、方向和整数 hit_limit`, style: "error" });
+  }
+  if (typeof $trigger === "undefined" || $trigger !== "button") {
+    const progress = hitLimit === 0 ? { ok: true, count: 0 } : readHitCounter(ruleDirection);
+    if (!progress.ok) {
+      return $done({ title, content: `${scope}${progress.message}`, style: "error" });
+    }
+    return $done({ title, content: `${scope}${hitProgress(progress.count)}\n点刷新清零此接口的生效次数`, style: "info" });
+  }
+
+  const cleared = resetHitCounter(hitCounterKey(ruleDirection));
   return $done(cleared
-    ? { title, content: `${scope}已清零，下次命中从头计数`, style: "good" }
+    ? { title, content: `${scope}${hitProgress(0)}\n已清零，下次命中从头计数`, style: "good" }
     : { title, content: `${scope}清零失败，请重试并检查脚本日志`, style: "error" }
   );
+}
+
+function hitProgress(count) {
+  if (hitLimit === 0) return "不限次数（不记录次数）";
+  if (hitLimit > 0) {
+    return `前 ${hitLimit} 次生效；已生效 ${count} 次，剩余 ${hitLimit - count} 次`;
+  }
+  const threshold = -hitLimit;
+  return `跳过前 ${threshold} 次；已跳过 ${count}/${threshold} 次` +
+    (count === threshold ? "，已进入持续生效阶段" : "，之后持续生效");
+}
+
+function readHitCounter(ruleDirection) {
+  if (!hitStore) return { ok: false, message: "hit counter storage unavailable; 计数存储不可用，无法读取进度" };
+  let saved;
+  try { saved = hitStore.read(hitCounterKey(ruleDirection)); }
+  catch (_) { return { ok: false, message: "hit counter storage unavailable; 计数存储不可用，无法读取进度" }; }
+  if (saved === null) return { ok: true, count: 0 };
+  let state;
+  try { state = JSON.parse(saved); }
+  catch (_) { return { ok: false, message: "invalid hit counter; 计数状态损坏，点击面板刷新清零恢复" }; }
+  if (!Number.isSafeInteger(state?.limit) || state.limit === 0 ||
+      !Number.isSafeInteger(state.count) || state.count < 1 ||
+      state.count > Math.abs(state.limit) || typeof state.urlPattern !== "string") {
+    return { ok: false, message: "invalid hit counter; 计数状态损坏，点击面板刷新清零恢复" };
+  }
+  return { ok: true, count: state.limit === hitLimit && state.urlPattern === urlPattern ? state.count : 0 };
 }
 
 function hitCounterKey(ruleDirection) {
@@ -1082,7 +1129,7 @@ function allowHit() {
 
   if (!hitStore) {
     if (hitLimit === 0) return true;
-    log("hit counter storage unavailable; passthrough");
+    log("hit counter storage unavailable; passthrough，计数存储不可用，保持原样", "已跳过");
     return false;
   }
 
@@ -1093,37 +1140,31 @@ function allowHit() {
     return true;
   }
 
-  const saved = hitStore.read(key);
-  const state = saved === null ? null : JSON.parse(saved);
-  if (saved !== null && (
-    !Number.isSafeInteger(state?.limit) || state.limit === 0 ||
-    !Number.isSafeInteger(state.count) || state.count < 1 ||
-    state.count > Math.abs(state.limit) || typeof state.urlPattern !== "string"
-  )) {
-    log("invalid hit counter; passthrough");
+  const progress = readHitCounter(direction);
+  if (!progress.ok) {
+    log(`${progress.message}; passthrough`, "已跳过");
     return false;
   }
 
-  const sameRule = state?.limit === hitLimit && state.urlPattern === urlPattern;
-  const count = sameRule ? state.count : 0;
+  const count = progress.count;
   const threshold = Math.abs(hitLimit);
   if (count === threshold) {
-    if (hitLimit > 0) log(`hit_limit=${hitLimit} reached; passthrough`);
+    if (hitLimit > 0) log(`hit_limit=${hitLimit} reached; passthrough，已生效 ${count}/${threshold} 次，剩余 0 次`, "已跳过");
     return hitLimit < 0;
   }
 
   // Keep read and write synchronous. Surge does not expose an atomic increment.
   const next = count + 1;
   if (!hitStore.write(JSON.stringify({ limit: hitLimit, count: next, urlPattern }), key)) {
-    log("could not save hit counter; passthrough");
+    log("could not save hit counter; passthrough，计数保存失败，保持原样", "已跳过");
     return false;
   }
-  if (hitLimit < 0) log(`hit ${next}/${threshold} ignored; passthrough`);
+  if (hitLimit < 0) log(`hit ${next}/${threshold} ignored; passthrough，已跳过 ${next}/${threshold} 次`, "已跳过");
   else log(`hit ${next}/${threshold} applied`);
   return hitLimit > 0;
 }
 
-function finish(result, shouldDelay = hitLimit === 0) {
+function finish(result, shouldDelay = false) {
   if (shouldDelay && delayMs > 0) {
     log(`delay ${delayMs} ms`);
 
