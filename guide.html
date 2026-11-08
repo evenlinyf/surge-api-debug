@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Surge API Debug 使用指南：参数、字段修改、筛选、故障模拟、生效次数和多模块配置。"><title>Surge API Debug 使用指南</title><style>*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:100px}body{margin:0;background:#f5f7fb;color:#172033;font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}a{color:#1558cc;text-underline-offset:3px}a:hover{text-decoration-thickness:2px}a:focus-visible{outline:3px solid #1558cc;outline-offset:4px;border-radius:3px}.skip-link{position:absolute;left:16px;top:-60px;background:white;padding:8px;z-index:10}.skip-link:focus{top:12px}.shell{max-width:1080px;margin:auto;padding:40px 28px 64px}header{margin-bottom:28px}.eyebrow{color:#53657d;font-size:13px;letter-spacing:.06em}h1{font-size:clamp(30px,5vw,44px);line-height:1.2;margin:10px 0 16px}h2{font-size:23px;line-height:1.4;margin:0 0 18px}h3{font-size:17px;line-height:1.5;margin:20px 0 10px}p{margin:10px 0 16px}.intro{max-width:780px;color:#53657d}.top-links{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0}.toc{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;gap:6px;background:#f5f7fbf5;border-bottom:1px solid #dce3ef;padding:12px 0;margin:0 0 22px;backdrop-filter:blur(8px)}.toc a{padding:5px 10px;background:white;border:1px solid #dce3ef;border-radius:7px;font-size:14px;text-decoration:none}.section{margin:22px 0;scroll-margin-top:110px}.card{padding:28px;background:white;border:1px solid #dce3ef;border-radius:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 24px}.grid>div{min-width:0}.mini-card{padding:12px 16px;background:#f5f7fb;border-radius:8px}.mini-card h3{margin-top:0}.mini-card p{margin-bottom:0}code,pre{font:14px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace}code{background:#edf2fa;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{margin:12px 0 20px;padding:18px;border:1px solid #dce3ef;border-radius:8px;background:#f5f7fb;overflow:auto;tab-size:2}pre code{padding:0;background:none}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid #e3e8f0}th{background:#f5f7fb;font-weight:600}td:first-child{white-space:nowrap}.note{padding:14px 18px;background:#edf4ff;border-left:3px solid #2764d2;border-radius:0 6px 6px 0;margin:18px 0;font-size:14px}footer{margin-top:28px;color:#617089;font-size:14px}.badge{display:inline-block;background:#e7efff;color:#174c9e;border-radius:20px;padding:3px 10px;font-size:13px}@media(max-width:700px){.shell{padding:24px 14px 40px}.card{padding:20px 16px}.grid{grid-template-columns:1fr}.toc{position:static}html{scroll-padding-top:20px}h2{font-size:21px}th,td{padding:10px}pre{padding:14px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}@media print{body{background:white}.shell{max-width:none;padding:0}.toc,.skip-link{display:none}.card{border:0;padding:0}.section{break-inside:avoid}pre{white-space:pre-wrap;overflow-wrap:anywhere}}</style></head><body>
+<a class="skip-link" href="#main-content">跳到主要内容</a><div class="shell">
+<header><p class="eyebrow">SURGE API DEBUG · 使用指南</p><h1>接口调试，从一条规则开始。</h1><p class="intro">修改请求与响应，模拟异常，并控制故障生效次数。此指南是独立 HTML 文件，下载或 clone 后直接用浏览器打开即可阅读。</p><span class="badge">适用源码版本 1.5.0</span><p class="intro">安装以所选 Release 的版本为准；多模块计数隔离需要 1.5.0 或更新版本。</p><div class="top-links"><a href="https://github.com/evenlinyf/surge-api-debug">GitHub 仓库</a><a href="https://github.com/evenlinyf/surge-api-debug/releases">版本发布</a></div></header>
+<nav class="toc" aria-label="指南目录"><a href="#start">开始使用</a><a href="#params">参数</a><a href="#matrix">合法组合</a><a href="#body">Body</a><a href="#http">Header / URL / Status</a><a href="#special">故障模拟</a><a href="#hit-limit">生效次数</a><a href="#multiple">多个模块</a><a href="#version">版本</a><a href="#troubleshooting">排查</a></nav>
+<main id="main-content" tabindex="-1">
+<section class="section doc" id="start"><div class="card">
+<h2>开始使用</h2>
+<ol><li>复制最新正式版安装地址，在 Surge「模块」中选择「从 URL 安装」。</li><li>填写目标接口的 URL 正则和修改参数，点击「应用」并启用模块。</li><li>调试 HTTPS 时，启用 MITM、添加目标主机名，并让测试设备信任同一份 Surge 证书。</li><li>重新触发接口，在请求的 Notes 中检查 API Debug 日志和修改后的内容。</li></ol>
+<pre>https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule</pre>
+<p>如果还不知道 URL 或 JSON 字段，先看 <a href="https://github.com/evenlinyf/surge-api-debug/blob/main/CAPTURE_GUIDE.md">Surge Mac 给手机抓包指南</a>。</p>
+<h3>快速示例：只让第一次响应返回 HTTP 500</h3>
+<pre>url=^https://api\.example\.com/v1/profile$
+direction=response
+target=status
+action=set
+path=$
+value=500
+value_type=number
+hit_limit=1
+delay_ms=0</pre>
+<p>此例只修改状态码；要替换整个 Body，使用 <code>target=body</code> 和 <code>path=$</code>。</p>
+</div></section>
+<section class="section doc" id="params">
+<div class="card">
+<h2>1. 参数模型</h2>
+<div class="grid">
+<div class="mini-card"><h3>url</h3><p>指定要命中的接口。</p></div>
+<div class="mini-card"><h3>direction</h3><p>request / response。</p></div>
+<div class="mini-card"><h3>target</h3><p>body / header / url / status。</p></div>
+<div class="mini-card"><h3>action</h3><p>set / format / remove / mock / abort。</p></div>
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>参数</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>url</code></td><td>匹配完整请求 URL 的正则，例如 <code>^https://api\.example\.com/v1/messages$</code>。</td></tr>
+<tr><td><code>direction</code></td><td><code>request</code> / <code>response</code></td></tr>
+<tr><td><code>target</code></td><td><code>body</code> / <code>header</code> / <code>url</code> / <code>status</code></td></tr>
+<tr><td><code>action</code></td><td><code>set</code> / <code>format</code> / <code>remove</code> / <code>mock</code> / <code>abort</code></td></tr>
+<tr><td><code>path</code></td><td>Body 下是 JSON Path，使用 <code>$</code> 表示整个 Body，数组下标必须写成 <code>[n]</code> 且已存在，越界时不修改响应；也可用 <code>[?(@.field == value)]</code> 筛选。Header 下是 Header 名。</td></tr>
+<tr><td><code>value</code></td><td>新值；使用 <code>@empty</code> 表示空字符串。<code>action=format</code> 时，<code>${old}</code> 表示当前字段的原值。<code>&amp;</code> 可直接输入，例如 <code>A&amp;B</code>；<code>%26</code> 也仍可使用。</td></tr>
+<tr><td><code>value_type</code></td><td><code>string</code> / <code>number</code> / <code>boolean</code> / <code>null</code> / <code>json</code></td></tr>
+<tr><td><code>hit_limit</code></td><td>生效次数。<code>0</code> 或留空表示每次生效，<code>3</code> 表示只在前 3 次生效，<code>-3</code> 表示从第 4 次起每次生效。</td></tr>
+<tr><td><code>delay_ms</code></td><td>0 ~ 25000，可叠加到任意操作。</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+<section class="section doc" id="matrix">
+<div class="card">
+<h2>2. 合法组合</h2>
+<div class="table-wrap">
+<table>
+<thead><tr><th>direction</th><th>target</th><th>action</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td>request</td><td>body</td><td>set / format / remove</td><td>修改 Request Body / JSON；format 仅限已有的字符串字段。</td></tr>
+<tr><td>request</td><td>header</td><td>set / remove</td><td>修改 Request Header。</td></tr>
+<tr><td>request</td><td>url</td><td>set</td><td>修改 Request URL。</td></tr>
+<tr><td>response</td><td>body</td><td>set / format / remove</td><td>修改 Response Body / JSON；format 仅限已有的字符串字段。</td></tr>
+<tr><td>response</td><td>header</td><td>set / remove</td><td>修改 Response Header。</td></tr>
+<tr><td>response</td><td>status</td><td>set</td><td>修改 HTTP Status。</td></tr>
+<tr><td>request</td><td>忽略</td><td>mock</td><td>直接返回 HTTP 200 Mock Response。</td></tr>
+<tr><td>request / response</td><td>忽略</td><td>abort</td><td>中断链路。</td></tr>
+</tbody>
+</table>
+</div>
+<div class="note"><strong>path 的语义由 target 决定：</strong>body → JSON Path（<code>$</code> 表示整个 Body）；header → Header 名；url/status 不使用 path。Module 参数中的 <code>path</code> 和 <code>value</code> 不要留空，不使用时也要填写明确的占位值。</div>
+</div>
+</section>
+<section class="section doc" id="body">
+<div class="card">
+<h2>3. Body 修改</h2>
+<div class="grid">
+<div>
+<h3>修改 JSON 字段</h3>
+<pre>url=https://api.example.com/api/messages
+direction=response
+target=body
+action=set
+path=data.items[0].content
+value=debug-content
+value_type=string</pre>
+</div>
+<div>
+<h3>字段设为空字符串</h3>
+<pre>direction=response
+target=body
+action=set
+path=data.version
+value=@empty
+value_type=string</pre>
+</div>
+<div>
+<h3>按数组元素筛选并修改</h3>
+<pre>direction=response
+target=body
+action=set
+path=data.items[?(@.id == 42 &amp;&amp; @.role == 'member')].content
+value=@empty
+value_type=string</pre>
+</div>
+<div>
+<h3>引用原值并在前面加文字</h3>
+<pre>direction=response
+target=body
+action=format
+path=data.items[?(@.id == 42)].content
+value=【已修改】${old}
+value_type=string</pre>
+</div>
+<div>
+<h3>字段设为 null</h3>
+<pre>direction=response
+target=body
+action=set
+path=data.user
+value=ignored
+value_type=null</pre>
+</div>
+<div>
+<h3>数组设为空</h3>
+<pre>direction=response
+target=body
+action=set
+path=data.items
+value=[]
+value_type=json</pre>
+</div>
+<div>
+<h3>删除字段</h3>
+<pre>direction=response
+target=body
+action=remove
+path=data.user.avatar
+value=ignored</pre>
+</div>
+</div>
+<div class="note">筛选中的 <code>@</code> 表示当前数组元素；支持数字、字符串（建议单引号）、布尔值和 <code>null</code>，以及 <code>==</code>、<code>!=</code>、大小比较、<code>&amp;&amp;</code>、<code>||</code> 和括号。每条 path 支持一个筛选器，后面必须跟要修改的字段；所有可写的匹配项都会修改，缺少目标字段或父路径的项会跳过，完全未命中时保持响应不变。不支持函数或完整 JSONPath。<code>format</code> 会为每条命中的字符串分别使用其原值；<code>value=前缀${old}后缀</code> 可同时在两边加文字。<code>${old}</code> 仅是占位符，不会执行 JavaScript；<code>set</code> 仍按字面量写入。</div>
+<h3>替换整个 Body</h3>
+<p><code>target=body</code> + <code>action=set</code> 且 <code>path=$</code> 时，替换整个 Body。</p>
+<pre>direction=response
+target=body
+action=set
+path=$
+value={"code":0,"data":null}
+value_type=json</pre>
+</div>
+</section>
+<section class="section doc" id="http">
+<div class="card">
+<h2>4. Header / URL / Status</h2>
+<div class="grid">
+<div>
+<h3>设置 Header</h3>
+<pre>direction=request
+target=header
+action=set
+path=Authorization
+value=Bearer debug-token</pre>
+</div>
+<div>
+<h3>删除 Header</h3>
+<pre>direction=request
+target=header
+action=remove
+path=Authorization
+value=ignored</pre>
+</div>
+<div>
+<h3>修改 URL</h3>
+<pre>direction=request
+target=url
+action=set
+path=$
+value=https://api.example.com/api/mock</pre>
+</div>
+<div>
+<h3>修改 Status</h3>
+<pre>direction=response
+target=status
+action=set
+path=$
+value=500</pre>
+</div>
+</div>
+</div>
+</section>
+<section class="section doc" id="special">
+<div class="card">
+<h2>5. Mock / Abort / Delay</h2>
+<div class="grid">
+<div>
+<h3>Mock Response</h3>
+<pre>url=https://api.example.com/api/profile
+direction=request
+action=mock
+path=$
+value={"code":0,"data":{"name":"debug"}}
+value_type=json</pre>
+</div>
+<div>
+<h3>Abort</h3>
+<pre>direction=response
+action=abort
+path=$
+value=ignored
+delay_ms=0</pre>
+</div>
+</div>
+<h3>延迟后返回 500</h3>
+<pre>direction=response
+target=status
+action=set
+path=$
+value=500
+delay_ms=5000</pre>
+<div class="note"><code>delay_ms</code> 是独立修饰参数，可与 set / format / remove / mock / abort 组合。</div>
+<h3 id="hit-limit">限制生效次数</h3>
+<p>例如，只让匹配接口的前 3 次响应返回 500。要跳过前 3 次，从第 4 次起持续返回 500，把下例的 <code>hit_limit</code> 改成 <code>-3</code>。</p>
+<pre>url=https://api.example.com/api/profile
+direction=response
+target=status
+action=set
+path=$
+value=500
+value_type=number
+hit_limit=3</pre>
+<p>Surge 先按 URL 匹配，脚本再确认操作是否适用。筛选没有匹配项、路径不可写、要删除的字段或 Header 不存在时不计数。一个请求即使修改多个数组元素，也只算一次。因次数限制跳过的请求直接放行，配置的延迟也不执行。</p>
+<p><strong>重置次数</strong>在 Surge 信息面板中打开「重置次数」并点一下刷新图标，看到「已清零，下次命中从头计数」即可。Mac 从 Surge 菜单栏的「面板」进入，iOS 在策略选择页查看。<code>hit_limit</code> 保持原值，面板会显示对应的 URL 正则与方向，点击时只清除这一组合的计数，其他接口和方向不受影响。重新打开面板时会恢复操作提示；自动刷新提示不会清零。<a href="https://manual.nssurge.com/tools/panel.html#dynamic-mode">Surge 信息面板文档</a></p>
+<p>1.5.0 起，每个完整 URL 正则与方向的组合单独保存计数。使用新的正则时从头开始，切回之前的正则则继续它的原有计数。修改非零限额后，该规则下一次符合条件的请求从头计数。升级至 1.5.0 后首次使用新计数，不继承 1.4.2 的旧计数。同一条正则匹配的不同请求地址共用限额。请求和响应各自计数，关闭再开启 Module 或只修改路径、值等参数会保留计数。也可以把 <code>hit_limit</code> 改成 <code>0</code>，发一条满足条件的请求清零，再改回限额。清零的这条请求会执行操作。</p>
+<div class="note">顺序请求按上述次数执行。多个请求同时命中时，Surge 的持久化接口没有提供原子计数操作，结果可能与设定次数有出入。<a href="https://manual.nssurge.com/scripting/api.html#persistentstore">Surge 脚本 API</a></div>
+</div>
+</section>
+<section class="section doc" id="multiple"><div class="card">
+<h2>6. 多个模块修改不同接口</h2>
+<p>给安装链接添加不同的查询参数，可以安装多个独立实例。它们共用一份 JS，在 Surge 中分别填写各自的接口 URL 和修改内容：</p>
+<pre>https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule?name=login
+https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule?name=messages</pre>
+<p><code>?name=...</code> 只区分安装链接，不会自动传入参数或更改显示名称，不需要在模块里再填写名称属性。</p>
+<div class="table-wrap"><table><thead><tr><th>参数</th><th>登录接口</th><th>消息接口</th></tr></thead><tbody>
+<tr><td>url</td><td><code>^https://api\.example\.com/v1/login$</code></td><td><code>^https://api\.example\.com/v1/messages$</code></td></tr>
+<tr><td>direction</td><td>response</td><td>response</td></tr>
+<tr><td>target / action</td><td>body / set</td><td>body / set</td></tr>
+<tr><td>path</td><td>data.version</td><td>data.message</td></tr>
+<tr><td>value</td><td>@empty</td><td>调试消息</td></tr>
+<tr><td>value_type</td><td>string</td><td>string</td></tr>
+<tr><td>hit_limit</td><td>1</td><td>3</td></tr>
+<tr><td>delay_ms</td><td>0</td><td>0</td></tr>
+</tbody></table></div>
+<p>从 1.5.0 起，按完整 URL 正则和方向隔离计数、重置范围。不同安装链接若填写相同正则和方向，仍共用计数。一次请求匹配同一正则的不同具体 URL，也共用该正则的限额。</p>
+<div class="note">此功能用于不同接口，正则不要重叠。同一方向只运行首个匹配的 HTTP 脚本；一份模块仍只有一组 path / value，暂不支持通过多个模块同时修改同一接口的不同字段。</div>
+</div></section>
+<section class="section doc" id="version"><div class="card">
+<h2>7. 版本与安装地址</h2>
+<p>普通安装使用 GitHub 最新正式 Release 附件；需要保持某个版本时，使用带版本号的 Release 地址。固定版 Module 会引用同一 Git 标签下的 JS，不需要另外上传 JS 附件。</p>
+<h3>最新正式版</h3>
+<pre>https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule</pre>
+<h3>固定版本</h3>
+<pre>https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.0/surge_api_debug.sgmodule</pre>
+<p>固定版本需在对应 Release 发布后使用。旧版 <a href="https://github.com/evenlinyf/surge-api-debug/releases/download/v1.4.2/surge_api_debug.sgmodule">1.4.2</a> 可继续安装，但不具备 1.5.0 的多模块计数隔离。所有已发布版本见 <a href="https://github.com/evenlinyf/surge-api-debug/releases">Releases</a>。</p>
+<p>Module 和 JS 的版本需要一致。安装 Module 后，Surge 会自动下载它指定的 JS：</p>
+<pre>script-path=https://raw.githubusercontent.com/evenlinyf/surge-api-debug/v1.5.0/surge_api_debug.js
+module_version=1.5.0</pre>
+<p>版本一致时日志包含 <code>script_version=1.5.0, module_version=1.5.0</code>。版本缺失或不一致时保持请求或响应不变，日志会提示 <code>version mismatch</code>；重新安装配套版本即可。</p>
+</div></section>
+
+<section class="section doc" id="troubleshooting">
+<div class="card">
+<h2>8. 排查</h2>
+<div class="grid">
+<div class="mini-card"><h3>没命中</h3><p>检查 url、direction 与 MITM。</p></div>
+<div class="mini-card"><h3>字段没改</h3><p>检查 path 是否匹配真实 JSON。</p></div>
+<div class="mini-card"><h3>次数没重置</h3><p>确认安装了 1.4.1 或更高版本，在「重置次数」面板手动点刷新并查看结果。</p></div>
+<div class="mini-card"><h3>value 异常</h3><p>检查 value_type；<code>&amp;</code> 可直接输入，或写成 <code>%26</code>。普通百分号无需处理。</p></div>
+<div class="mini-card"><h3>确认执行</h3><p>在 Script / Notes 查看 [Surge API Debug] 日志。</p></div>
+</div>
+</div>
+</section>
+</main><footer>Surge API Debug · MIT License</footer></div></body></html>

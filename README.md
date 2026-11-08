@@ -2,6 +2,8 @@
 
 在 Surge 中修改 HTTP 请求和响应，模拟接口异常，并控制故障生效几次。通过 Module 参数选择要调试的接口，无需修改 JavaScript。
 
+完整使用指南见 [guide.html](guide.html)。clone 或下载后，用浏览器直接打开该文件即可；样式全部内嵌，可单独拷贝阅读，无需启动服务。
+
 ## 安装
 
 复制以下地址，在 Surge 的「模块」中选择从 URL 安装。这个地址始终指向最新的正式 Release。
@@ -10,11 +12,13 @@
 https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule
 ```
 
-要锁定在 1.4.2，复制下面的固定版地址安装。
+要锁定在 1.5.0，复制下面的固定版地址安装。
 
 ```text
-https://github.com/evenlinyf/surge-api-debug/releases/download/v1.4.2/surge_api_debug.sgmodule
+https://github.com/evenlinyf/surge-api-debug/releases/download/v1.5.0/surge_api_debug.sgmodule
 ```
+
+旧版 [1.4.2 固定安装地址](https://github.com/evenlinyf/surge-api-debug/releases/download/v1.4.2/surge_api_debug.sgmodule) 仍可使用，但不支持多个模块的计数隔离。
 
 调试 HTTPS 时，在 Surge 中启用 MITM，并把目标域名加入 MITM 主机名列表。测试设备需要信任 Surge 的 MITM 证书。[Surge HTTP 处理文档](https://manual.nssurge.com/http/overview.html)
 
@@ -104,13 +108,53 @@ value_type=json
 
 ## 生效次数与重置
 
-URL 命中且操作条件满足时才计数。同一请求修改多个数组元素也只算一次。同一条 URL 正则匹配的不同请求共用限额，请求方向和响应方向各自计数。更换 URL 规则或非零限额后，下一次符合条件的请求从头计数。
+URL 命中且操作条件满足时才计数。同一请求修改多个数组元素也只算一次。同一条 URL 正则匹配的不同请求共用限额，请求方向和响应方向各自计数。
+
+从 1.5.0 起，每个完整 URL 正则与方向的组合分别保存计数。换成尚未使用的 URL 正则时从头计数，切回之前的正则会继续使用它的计数。修改非零限额后，该规则下一次符合条件的请求从头计数。升级到 1.5.0 后，新计数独立于 1.4.2 的旧计数，首次命中从头开始。
 
 要重新使用同一个限额，打开 Surge 的「重置次数」信息面板，点击刷新图标 **⟳**。显示「已清零，下次命中从头计数」后，下一次命中会从第 1 次开始。`hit_limit` 保持原值。Mac 从 Surge 菜单栏的「面板」进入，iOS 在策略选择页查看。[Surge 信息面板文档](https://manual.nssurge.com/tools/panel.html#dynamic-mode)
+
+面板内容会注明 URL 正则和 `request` / `response` 方向。点击刷新只清零该组合的计数，不影响其他接口或另一个方向。自动刷新面板只更新提示，不会清零。
 
 ![Surge Mac 菜单栏中「面板 → 重置次数」的入口](assets/iShot_2026-11-08_00.57.56.png)
 
 如果面板不可用，可将 `hit_limit` 改为 `0`，发一条符合条件的请求，再改回原值。这条用于清零的请求也会执行操作。Surge 的计数读写没有原子操作，同时命中时实际次数可能与限额有出入。[Surge 持久化 API](https://manual.nssurge.com/scripting/api.html#persistentstore)
+
+## 多个模块修改不同接口
+
+从 1.5.0 起，可以多次安装同一份 Module，分别修改不同接口，共用一份 JS。给安装链接添加不同的查询参数即可创建独立实例，例如：
+
+```text
+https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule?name=login
+https://github.com/evenlinyf/surge-api-debug/releases/latest/download/surge_api_debug.sgmodule?name=messages
+```
+
+`?name=...` 只用于区分安装链接，不会传入模块配置，也不会更改显示名称。安装后分别填写各自的接口 URL 和修改参数，不需要增加名称属性：
+
+| 参数 | 登录接口模块 | 消息接口模块 |
+| --- | --- | --- |
+| `url` | `^https://api\.example\.com/v1/login$` | `^https://api\.example\.com/v1/messages$` |
+| `direction` | `response` | `response` |
+| `target` | `body` | `body` |
+| `action` | `set` | `set` |
+| `path` | `data.version` | `data.message` |
+| `value` | `@empty` | `调试消息` |
+| `value_type` | `string` | `string` |
+| `hit_limit` | `1` | `3` |
+| `delay_ms` | `0` | `0` |
+
+两个模块可以同时启用，各自计数，各自重置。判断计数是否共用的依据是配置中的完整 `url` 正则和方向，与安装链接的 `name` 无关。若两份配置的 URL 正则和方向相同，则共用计数和重置范围。
+
+每行脚本日志也会标明方向和完整 URL 正则，便于区分不同接口；重置日志使用该面板配置的方向与正则。例如：
+
+```text
+[Surge API Debug][response][^https://api\.example\.com/v1/login$] hit 1/1 applied
+[Surge API Debug][response][^https://api\.example\.com/v1/messages$] hit 1/3 applied
+```
+
+若脚本没有收到 URL 正则，日志会显示 `unconfigured`。
+
+每份模块仍只有一组 `path` 和 `value`。本功能用于不同接口；同一方向只执行第一个匹配的 HTTP 脚本，多个正则不要重叠，不能依靠多份模块同时修改同一接口的不同字段。[Surge HTTP 脚本说明](https://manual.nssurge.com/scripting/http-request.html)
 
 ## 排查
 
@@ -120,14 +164,14 @@ URL 命中且操作条件满足时才计数。同一请求修改多个数组元�
 
 ## 本地测试
 
-使用 Node.js 22 或更新版本。测试模拟 Surge 的脚本环境，无需安装依赖，也无需连接 Surge 或访问网络。
+使用 Node.js 22 或更新版本。单元测试模拟 Surge 的脚本环境，无需安装依赖或访问网络。本机若安装了 Surge CLI，还会自动执行双模块配置的原生语法检查；未安装时只跳过这项原生检查。也可用环境变量 `SURGE_CLI` 指定 CLI 路径。
 
 ```sh
 node --test tests/*.test.js
 node --test scripts/coverage-api-debug.js
 ```
 
-测试覆盖 Body 和 Header、URL 与状态码、Mock 与 Abort、筛选、次数和重置面板。覆盖率命令用 V8 统计脚本的执行区间，最低要求为 95%。
+测试覆盖 Body 和 Header、URL 与状态码、Mock 与 Abort、筛选、次数和重置面板，以及多个模块交替命中、计数隔离和单独重置。覆盖率命令用 V8 统计脚本的执行区间，最低要求为 95%。
 
 ## 发布新版本
 

@@ -2,10 +2,10 @@
  * surge_api_debug.js
  *
  * 通用 Surge API 调试 / 故障注入脚本。
- * Script Version: 1.4.2
+ * Script Version: 1.5.0
  *
  * Module 参数：
- *   url         由 Module 的 pattern 匹配，并传给脚本区分计数
+ *   url         由 Module 的 pattern 匹配，按完整正则与方向分别计数和重置
  *   direction   request / response，由 type=http-{{{direction}}} 决定
  *   target      body / header / url / status
  *   action      set / format / remove / mock / abort
@@ -36,7 +36,7 @@
  */
 
 const PREFIX = "[Surge API Debug]";
-const SCRIPT_VERSION = "1.4.2";
+const SCRIPT_VERSION = "1.5.0";
 
 const args = parseArguments(
   typeof $argument === "string" ? $argument : ""
@@ -1009,8 +1009,9 @@ function invalid(message) {
 }
 
 function log(message) {
+  const ruleDirection = target === "reset" ? (args.direction || "unknown") : direction;
   console.log(
-    `${PREFIX} ${message}`
+    `${PREFIX}[${ruleDirection}][${urlPattern || "unconfigured"}] ${message}`
   );
 }
 
@@ -1026,22 +1027,23 @@ function handleResetPanel() {
   }
 
   const title = "重置次数";
+  const ruleDirection = args.direction;
+  const scope = `${ruleDirection} · ${urlPattern}\n`;
   if (typeof $trigger === "undefined" || $trigger !== "button") {
-    return $done({ title, content: "点刷新清零 API Debug 的生效次数", style: "info" });
+    return $done({ title, content: `${scope}点刷新清零此接口的生效次数`, style: "info" });
   }
 
-  const ruleDirection = args.direction;
   const validRule = urlPattern && (ruleDirection === "request" || ruleDirection === "response");
   const cleared = validRule && resetHitCounter(hitCounterKey(ruleDirection));
   return $done(cleared
-    ? { title, content: "已清零，下次命中从头计数", style: "good" }
-    : { title, content: "清零失败，请重试并检查脚本日志", style: "error" }
+    ? { title, content: `${scope}已清零，下次命中从头计数`, style: "good" }
+    : { title, content: `${scope}清零失败，请重试并检查脚本日志`, style: "error" }
   );
 }
 
 function hitCounterKey(ruleDirection) {
-  // Both the Module's HTTP script and its panel use the same storage slot.
-  if (urlPattern) return `surge-api-debug-hits-v2-module-${ruleDirection}`;
+  // The HTTP script and reset panel share only this exact pattern/direction's slot.
+  if (urlPattern) return `surge-api-debug-hits-v3-module-${ruleDirection}-${encodeURIComponent(urlPattern)}`;
 
   const name = typeof $script === "undefined" ? "" : $script?.name;
   return `surge-api-debug-hits-v2-${ruleDirection}-${encodeURIComponent(name || "API Debug")}`;

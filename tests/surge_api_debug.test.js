@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const CURRENT_VERSION = "1.4.2";
+const CURRENT_VERSION = "1.5.0";
 
 const scriptSource = fs.readFileSync(
   path.join(__dirname, "../surge_api_debug.js"),
@@ -73,6 +73,205 @@ function createPersistentStore() {
   };
 }
 
+function createModuleInstance(persistentStore, options = {}) {
+  const source = fs.readFileSync(path.join(__dirname, "../surge_api_debug.sgmodule"), "utf8");
+  const values = {
+    url: "^https://example.com/login$", direction: "response", target: "body",
+    action: "set", path: "$", value: "login", value_type: "string",
+    hit_limit: "1", delay_ms: "0", ...options
+  };
+  const render = line => line.match(/\bargument="([^"]+)"/)[1]
+    .replace(/\{\{\{(\w+)\}\}\}/g, (_, name) => values[name]);
+  const httpLine = source.split("\n").find(line => line.includes("type=http-"));
+  const resetLine = source.split("\n").find(line => line.includes("type=generic"));
+  return {
+    hit: (overrides = {}) => runScript({
+      argument: render(httpLine), moduleVersion: null, persistentStore,
+      direction: values.direction, scriptName: "API Debug (Surge API Debug)",
+      ...overrides
+    }),
+    panel: (trigger = "button") => runScript({
+      argument: render(resetLine), moduleVersion: null, persistentStore,
+      direction: null, scriptName: "API-Debug-Reset (Surge API Debug)",
+      input: { purpose: "panel", panelName: "API-Debug-Reset" }, trigger
+    })
+  };
+}
+
+test("every log line identifies its module rule and HTTP direction", () => {
+  const store = createPersistentStore();
+  for (const [options, prefix] of [
+    [{}, "[Surge API Debug][response][^https://example.com/login$] "],
+    [{ url: "^https://example.com/messages$" }, "[Surge API Debug][response][^https://example.com/messages$] "],
+    [{ direction: "request" }, "[Surge API Debug][request][^https://example.com/login$] "]
+  ]) {
+    const instance = createModuleInstance(store, options);
+    for (const { logs } of [instance.hit(), instance.hit()]) {
+      assert.ok(logs.length > 0);
+      for (const line of logs) assert.ok(line.startsWith(prefix), line);
+    }
+  }
+});
+
+test("reset logs use the configured direction even without an HTTP packet", () => {
+  for (const direction of ["request", "response"]) {
+    const instance = createModuleInstance(createPersistentStore(), { direction });
+    instance.hit();
+    const { logs } = instance.panel();
+    assert.ok(logs.some(line => line.includes("hit counter reset")));
+    for (const line of logs) {
+      assert.ok(line.startsWith(`[Surge API Debug][${direction}][^https://example.com/login$] `), line);
+    }
+  }
+});
+
+test("version errors retain rule context and missing rules have an explicit fallback", () => {
+  const { logs } = runScript({
+    argument: "url_pattern=^https://example.com/login$, target=body",
+    moduleVersion: "old"
+  });
+  assert.ok(logs.some(line => line.includes("version mismatch")));
+  for (const line of logs) {
+    assert.ok(line.startsWith("[Surge API Debug][response][^https://example.com/login$] "), line);
+  }
+  const fallback = runScript({ argument: undefined, moduleVersion: null });
+  assert.ok(fallback.logs.length > 0);
+  for (const line of fallback.logs) {
+    assert.ok(line.startsWith("[Surge API Debug][response][unconfigured] "), line);
+  }
+});
+
+test("interleaved modules keep independent positive limits despite identical script names", () => {
+  const store = createPersistentStore();
+  const login = createModuleInstance(store, { hit_limit: "2" });
+  const messages = createModuleInstance(store, {
+    url: "^https://example.com/messages$", value: "messages"
+  });
+  assert.equal(login.hit().result.body, "login");
+  assert.equal(messages.hit().result.body, "messages");
+  assert.equal(login.hit().result.body, "login");
+  assert.equal(messages.hit().result.body, undefined);
+  assert.equal(login.hit().result.body, undefined);
+});
+
+test("one module's skipped hits do not consume or restart another module's quota", () => {
+  const store = createPersistentStore();
+  const login = createModuleInstance(store, { hit_limit: "-2" });
+  const messages = createModuleInstance(store, {
+    url: "^https://example.com/messages$", value: "messages"
+  });
+  assert.equal(login.hit().result.body, undefined);
+  assert.equal(messages.hit().result.body, "messages");
+  assert.equal(login.hit().result.body, undefined);
+  assert.equal(messages.hit().result.body, undefined);
+  assert.equal(login.hit().result.body, "login");
+  assert.equal(login.hit().result.body, "login");
+  assert.equal(messages.hit().result.body, undefined);
+});
+
+test("a panel reset clears only its configured pattern and direction", () => {
+  const store = createPersistentStore();
+  const login = createModuleInstance(store);
+  const request = createModuleInstance(store, { direction: "request" });
+  const messages = createModuleInstance(store, {
+    url: "^https://example.com/messages$", value: "messages"
+  });
+  assert.equal(login.hit().result.body, "login");
+  assert.equal(request.hit().result.body, "login");
+  assert.equal(messages.hit().result.body, "messages");
+  assert.equal(login.panel("auto-interval").result.style, "info");
+  assert.equal(login.hit().result.body, undefined);
+  assert.equal(login.panel().result.style, "good");
+  assert.equal(login.hit().result.body, "login");
+  assert.equal(login.hit().result.body, undefined);
+  assert.equal(messages.hit().result.body, undefined);
+  assert.equal(request.hit().result.body, undefined);
+  assert.equal(messages.panel().result.style, "good");
+  assert.equal(messages.hit().result.body, "messages");
+  assert.equal(login.hit().result.body, undefined);
+});
+
+test("unlimited mode clears only the matching module's counter", () => {
+  const store = createPersistentStore();
+  const login = createModuleInstance(store);
+  const messages = createModuleInstance(store, { url: "^https://example.com/messages$" });
+  assert.equal(login.hit().result.body, "login");
+  assert.equal(messages.hit().result.body, "login");
+  assert.equal(createModuleInstance(store, { hit_limit: "0" }).hit().result.body, "login");
+  assert.equal(login.hit().result.body, "login");
+  assert.equal(messages.hit().result.body, undefined);
+  assert.equal(login.hit().result.body, undefined);
+});
+
+test("changing a module's limit preserves other patterns' exhausted counters", () => {
+  const store = createPersistentStore();
+  const login = createModuleInstance(store);
+  const messages = createModuleInstance(store, { url: "^https://example.com/messages$" });
+  login.hit();
+  messages.hit();
+  const changed = createModuleInstance(store, { hit_limit: "2" });
+  assert.equal(changed.hit().result.body, "login");
+  assert.equal(messages.hit().result.body, undefined);
+  assert.equal(changed.hit().result.body, "login");
+  assert.equal(changed.hit().result.body, undefined);
+});
+
+test("exact regex patterns containing delimiters, percent escapes or Unicode do not alias", () => {
+  const store = createPersistentStore();
+  const patterns = [
+    "^https://example.com/a/b$", "^https://example.com/a%2Fb$",
+    "^https://example.com/a\\?x=1&value_type=number$",
+    "^https://example.com/a\\?x=1%26value_type=number$",
+    "^https://example.com/items/[0-9]{1,3}$", "^https://example.com/消息$"
+  ];
+  const modules = patterns.map(url => createModuleInstance(store, { url }));
+  for (const module of modules) assert.equal(module.hit().result.body, "login");
+  for (const module of modules) assert.equal(module.hit().result.body, undefined);
+  assert.equal(modules[2].panel().result.style, "good");
+  assert.equal(modules[2].hit().result.body, "login");
+  assert.equal(modules[3].hit().result.body, undefined);
+});
+
+test("the same pattern and direction share a counter independently of script names", () => {
+  const store = createPersistentStore();
+  const first = createModuleInstance(store);
+  const second = createModuleInstance(store, { value: "other" });
+  assert.equal(first.hit().result.body, "login");
+  assert.equal(second.hit({ scriptName: "A different installed instance" }).result.body, undefined);
+  assert.equal(second.panel().result.style, "good");
+  assert.equal(first.hit().result.body, "login");
+  assert.equal(second.hit().result.body, undefined);
+});
+
+test("new pattern counters do not consume or clear the old global module counter", () => {
+  const store = createPersistentStore();
+  const oldKey = "surge-api-debug-hits-v2-module-response";
+  const oldState = JSON.stringify({ count: 1, limit: 1, urlPattern: "^https://example.com/login$" });
+  store.write(oldState, oldKey);
+  const module = createModuleInstance(store);
+  assert.equal(module.hit().result.body, "login");
+  assert.equal(module.hit().result.body, undefined);
+  assert.equal(module.panel().result.style, "good");
+  assert.equal(store.read(oldKey), oldState);
+});
+
+test("reset panel feedback identifies the affected interface and direction", () => {
+  const store = createPersistentStore();
+  const url = "^https://example.com/messages$";
+  const module = createModuleInstance(store, { url, direction: "request" });
+  for (const trigger of ["auto-interval", "button"]) {
+    const result = module.panel(trigger).result;
+    assert.ok(result.content.includes(url));
+    assert.ok(result.content.includes("request"));
+  }
+  store.write = () => false;
+  module.hit();
+  store.read = () => "existing";
+  const failed = module.panel().result;
+  assert.equal(failed.style, "error");
+  assert.ok(failed.content.includes(url));
+});
+
 test("only a manual Surge panel click clears the selected direction's quota", () => {
   const moduleSource = fs.readFileSync(path.join(
     __dirname, "../surge_api_debug.sgmodule"
@@ -127,7 +326,7 @@ test("only a manual Surge panel click clears the selected direction's quota", ()
   assert.match(panel[0], /(?:^|,\s*)update-interval=1(?:,|$)/);
 });
 
-test("changing the Module URL pattern starts a fresh quota while one regex shares its quota across requests", () => {
+test("Module URL patterns retain independent quotas while one regex shares its quota across requests", () => {
   const moduleSource = fs.readFileSync(path.join(
     __dirname, "../surge_api_debug.sgmodule"
   ), "utf8");
@@ -151,7 +350,7 @@ test("changing the Module URL pattern starts a fresh quota while one regex share
   assert.equal(run(first, 2), undefined);
   assert.equal(run(second, 1), "A, target=B&hit_limit=99");
   assert.equal(run(second, 2), undefined);
-  assert.equal(run(first, 2), "A, target=B&hit_limit=99");
+  assert.equal(run(first, 2), undefined);
 });
 
 test("positive hit_limit applies to the first N requests without delaying later requests", () => {
@@ -400,7 +599,7 @@ test("module declares every editable argument and required script option", () =>
   assert.match(moduleSource, /^#!arguments=url,direction:response,target:body,action:set,path,value,value_type:string,hit_limit:0,delay_ms:0$/m);
   assert.match(moduleSource, /^#!arguments-desc=.*url=.*direction=.*target=.*action=.*path=.*value=.*value_type=.*hit_limit=.*delay_ms=/m);
   assert.match(moduleSource, /type=http-\{\{\{direction\}\}\}/);
-  assert.match(moduleSource, /pattern=\{\{\{url\}\}\}/);
+  assert.match(moduleSource, /pattern="\{\{\{url\}\}\}"/);
   assert.match(moduleSource, /argument="url_pattern=\{\{\{url\}\}\}, target=/);
   assert.match(moduleSource, /requires-body=true, max-size=4194304, timeout=30, debug=true/);
   for (const parameter of ["target", "action", "hit_limit", "path", "value", "value_type", "delay_ms"]) {
