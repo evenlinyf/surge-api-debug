@@ -175,6 +175,28 @@ node --test scripts/coverage-api-debug.js
 
 ## 发布新版本
 
-同步更新 Module 和 JS 的版本号，让 Module 的两个脚本入口指向新标签下的 JS。推送该标签后，在 GitHub 创建对应的正式 Release，将 `surge_api_debug.sgmodule` 以同名附件上传，并设为最新版本。最新版安装地址保持不变。[GitHub Release 链接说明](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)
+同步更新 Module 和 JS 的版本号，让 Module 的两个脚本入口指向新标签下的 JS，提交并推送到 `main`。然后在 GitHub 仓库打开 **Actions → Publish release → Run workflow**，选择 `main` 并运行。
+
+工作流会自动完成：
+
+1. 从 JS 读取版本，检查脚本头、Module 说明、两个脚本地址及 `module_version` 是否一致。
+2. 运行全部测试和最低 95% 的覆盖率检查。GitHub Linux runner 没有 Surge CLI，会跳过原生配置检查；该项仍需在安装了 Surge 的本机运行。
+3. 按源码版本创建 `vX.Y.Z` tag，指向本次通过测试的提交；已有 tag 必须指向同一提交。
+4. 创建正式 Release，生成发布说明，上传同名 `surge_api_debug.sgmodule` 附件，并设为最新版。JS 通过相同 tag 下的源码地址提供。
+5. 下载发布的 Module 和固定版本 JS，与本次源码逐一比对。
+
+也可以自行创建并推送 `vX.Y.Z` tag 触发同一流程；tag 必须与源码版本一致。普通代码推送不会自动发布。已经存在的 Release 不会被覆盖，重复运行会报错；发布后验证失败时先检查已生成的 Release，不要直接重复发布。
+
+工作流使用仓库自带的 `GITHUB_TOKEN`，仅发布任务申请 `contents: write`，不需要添加个人令牌；仓库或组织策略需允许 Actions 创建 Release。手动运行按钮需要工作流先推送到默认分支。
+
+发布前可在本机检查版本配对：
+
+```sh
+node scripts/check-release.js
+# 手动打 tag 时，还可验证指定 tag 与源码一致：
+node scripts/check-release.js v1.5.0
+```
+
+最新版安装地址保持不变。[GitHub Release 链接说明](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)
 
 本项目使用 [MIT 许可证](LICENSE)。
